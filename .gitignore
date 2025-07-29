@@ -12,3 +12,6 @@ coverage
 
 # Example
 src/Examples/
+
+# VS Code
+.vscode

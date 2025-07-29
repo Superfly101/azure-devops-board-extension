@@ -2,11 +2,11 @@
     "manifestVersion": 1,
     "id": "infrasync-board-extension",
     "publisher": "InfrasyncInc",
-    "version": "1.0.1",
+    "version": "1.0.4",
     "name": "Extension Sample",
     "description": "Azure DevOps extension sample",
     "categories": [
-        "Azure Pipelines"
+        "Azure Boards"
     ],
     "targets": [
         {

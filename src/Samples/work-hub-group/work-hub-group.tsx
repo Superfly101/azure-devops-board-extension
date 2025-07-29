@@ -3,7 +3,7 @@ import * as SDK from "azure-devops-extension-sdk";
 
 import "./work-hub-group.scss";
 
-import { Header } from "azure-devops-ui/Header";
+import { Header, TitleSize } from "azure-devops-ui/Header";
 import { Page } from "azure-devops-ui/Page";
 import { TextField, TextFieldWidth } from "azure-devops-ui/TextField";
 import { FormItem } from "azure-devops-ui/FormItem";
@@ -57,7 +57,7 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
   public render(): JSX.Element {
     return (
       <Page className="sample-hub flex-grow">
-        <Header title="Custom Work Hub" />
+        <Header title="Custom Work Hub" titleSize={TitleSize.Large} />
         <div className="page-content">
           <FormItem label="Project Name" error={false} className="sample-form-section">
             <TextField

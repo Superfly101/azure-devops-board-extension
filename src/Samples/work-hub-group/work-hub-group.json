@@ -7,7 +7,7 @@
                 "ms.vss-work-web.work-hub-group"
             ],
             "properties": {
-                "name": "Custom Work Hub",
+                "name": "My Hub",
                 "uri": "dist/work-hub-group/work-hub-group.html",
                 "icon": {
                     "light": "static/app_folder.png",

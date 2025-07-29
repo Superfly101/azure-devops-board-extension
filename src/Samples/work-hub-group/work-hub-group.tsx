@@ -7,6 +7,8 @@ import { Header } from "azure-devops-ui/Header";
 import { Page } from "azure-devops-ui/Page";
 import { TextField, TextFieldWidth } from "azure-devops-ui/TextField";
 import { FormItem } from "azure-devops-ui/FormItem";
+import { SimpleTagPickerExample } from "./tag-picker";
+import  DropdownMultiSelectExample  from "./multi-select-dropdown";
 
 import { showRootComponent } from "../../Common";
 import {
@@ -57,7 +59,7 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
       <Page className="sample-hub flex-grow">
         <Header title="Custom Work Hub" />
         <div className="page-content">
-          <FormItem label="Project Name" error={false}>
+          <FormItem label="Project Name" error={false} className="sample-form-section">
             <TextField
               ariaLabel="Project Name"
               value={projectObservable}
@@ -68,9 +70,15 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
             />
           </FormItem>
           
-          <FormItem label="Source of truth Epic ID" error={true}>
-            
+          <FormItem label="Source of truth Epic ID" error={true} className="sample-form-section">
+            <SimpleTagPickerExample />
           </FormItem>
+
+          <FormItem label="List of PFO boards" error={true} className="sample-form-section">
+            <DropdownMultiSelectExample />
+          </FormItem>
+
+
 
         </div>
       </Page>

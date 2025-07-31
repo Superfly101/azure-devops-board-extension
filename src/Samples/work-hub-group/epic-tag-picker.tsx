@@ -1,7 +1,7 @@
-import { useObservableArray } from "azure-devops-ui/Core/Observable";
-import { ISuggestionItemProps } from "azure-devops-ui/SuggestionsList";
-import { TagPicker } from "azure-devops-ui/TagPicker";
 import * as React from "react";
+import { TagPicker } from "azure-devops-ui/TagPicker";
+import { useObservableArray, useObservable } from "azure-devops-ui/Core/Observable";
+import { ISuggestionItemProps } from "azure-devops-ui/SuggestionsList";
 
 interface TagItem {
     id: number;
@@ -23,9 +23,11 @@ const tagData: TagItem[] = [
     }
 ];
 
-export const SimpleTagPickerExample: React.FunctionComponent<{}> = () => {
+export const AsyncEpicTagPicker: React.FunctionComponent<{}> = () => {
     const [tagItems, setTagItems] = useObservableArray<TagItem>(tagData.slice(0, 2));
     const [suggestions, setSuggestions] = useObservableArray<TagItem>([]);
+    const [suggestionsLoading, setSuggestionsLoading] = useObservable<boolean>(false);
+    const timeoutId = React.useRef<number>(0);
 
     const areTagsEqual = (a: TagItem, b: TagItem) => {
         return a.id === b.id;
@@ -39,19 +41,29 @@ export const SimpleTagPickerExample: React.FunctionComponent<{}> = () => {
     };
 
     const onSearchChanged = (searchValue: string) => {
-        setSuggestions(
-            tagData
-                .filter(
-                    // Items not already included
-                    testItem =>
-                        tagItems.value.findIndex(
-                            testSuggestion => testSuggestion.id == testItem.id
-                        ) === -1
-                )
-                .filter(
-                    testItem => testItem.text.toLowerCase().indexOf(searchValue.toLowerCase()) > -1
-                )
-        );
+        clearTimeout(timeoutId.current);
+
+        // Simulates a 1000ms round trip to retrieve values
+        setSuggestionsLoading(true);
+
+        timeoutId.current = window.setTimeout(() => {
+            setSuggestions(
+                tagData
+                    .filter(
+                        // Items not already included
+                        testItem =>
+                            tagItems.value.findIndex(
+                                testSuggestion => testSuggestion.id == testItem.id
+                            ) === -1
+                    )
+                    .filter(
+                        testItem =>
+                            testItem.text.toLowerCase().indexOf(searchValue.toLowerCase()) > -1
+                    )
+            );
+
+            setSuggestionsLoading(false);
+        }, 1000);
     };
 
     const onTagAdded = (tag: TagItem) => {
@@ -78,7 +90,7 @@ export const SimpleTagPickerExample: React.FunctionComponent<{}> = () => {
                 renderSuggestionItem={renderSuggestionItem}
                 selectedTags={tagItems}
                 suggestions={suggestions}
-                suggestionsLoading={false}
+                suggestionsLoading={suggestionsLoading}
                 ariaLabel={"Search for additional tags"}
             />
         </div>

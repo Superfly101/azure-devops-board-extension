@@ -1,5 +1,196 @@
 @import "node_modules/azure-devops-ui/Core/_platformCommon.scss";
 
-.sample-form-section {
-    margin-top: 20px;
+.dependency-epic-hub {
+  .page-content {
+    padding: 24px;
+    max-width: none;
+    
+    .form-container {
+      display: flex;
+      justify-content: center;
+    //   align-items: flex-start;
+    //   min-height: calc(100vh - 120px);
+      
+      .form-card {
+        width: 100%;
+        max-width: 800px;
+        margin-top: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        border: 1px solid var(--palette-neutral-20);
+        
+        .form-content {
+          padding-inline: 32px;
+          padding-block: 16px;
+          width: 100%;
+          
+          .form-header {
+            margin-bottom: 32px;
+            text-align: center;
+            
+            .form-title {
+              font-size: 20px;
+              font-weight: 600;
+              color: var(--text-primary-color);
+              margin: 0 0 8px 0;
+              line-height: 1.3;
+            }
+            
+            .form-description {
+              font-size: 14px;
+              color: var(--text-secondary-color);
+              margin: 0;
+              line-height: 1.4;
+            }
+          }
+          
+          .form-fields {
+            .form-field {
+              margin-bottom: 24px;
+              
+              &:last-child {
+                margin-bottom: 0;
+              }
+              
+              .form-item-label {
+                font-weight: 600;
+                color: var(--text-primary-color);
+                margin-bottom: 4px;
+              }
+              
+              .form-item-message {
+                color: var(--text-secondary-color);
+                font-size: 12px;
+                margin-top: 4px;
+              }
+              
+              // Style the input controls
+              .text-field-container {
+                .text-field {
+                  width: 100%;
+                }
+              }
+              
+              // Style dropdowns and pickers
+              .dropdown-container,
+              .tag-picker-container {
+                width: 100%;
+              }
+            }
+          }
+          
+          .form-actions {
+            margin-top: 40px;
+            display: flex;
+            justify-content: center;
+            
+            .button-group {
+              gap: 12px;
+              
+              .button {
+                min-width: 120px;
+                height: 36px;
+                
+                &.primary {
+                  background-color: var(--palette-primary);
+                  
+                  &:hover {
+                    background-color: var(--palette-primary-shade-10);
+                  }
+                }
+                
+                &:not(.primary) {
+                  border: 1px solid var(--palette-neutral-30);
+                  
+                  &:hover {
+                    background-color: var(--palette-neutral-8);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+// Responsive design
+@media (max-width: 768px) {
+  .dependency-epic-hub {
+    .page-content {
+      padding: 16px;
+      
+      .form-container {
+        .form-card {
+          margin-top: 16px;
+          
+          .form-content {
+            padding: 24px 20px;
+            
+            .form-header {
+              margin-bottom: 24px;
+              
+              .form-title {
+                font-size: 18px;
+              }
+            }
+            
+            .form-fields {
+              .form-field {
+                margin-bottom: 20px;
+              }
+            }
+            
+            .form-actions {
+              margin-top: 32px;
+              
+              .button-group {
+                flex-direction: column;
+                width: 100%;
+                
+                .button {
+                  width: 100%;
+                  margin-bottom: 8px;
+                  
+                  &:last-child {
+                    margin-bottom: 0;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+// Dark theme support
+@media (prefers-color-scheme: dark) {
+  .dependency-epic-hub {
+    .form-container {
+      .form-card {
+        background-color: var(--background-color);
+        border-color: var(--palette-neutral-30);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      }
+    }
+  }
+}
+
+// Focus states for accessibility
+.dependency-epic-hub {
+  .form-content {
+    .text-field:focus,
+    .dropdown:focus,
+    .tag-picker:focus {
+      outline: 2px solid var(--focus-border-color);
+      outline-offset: 2px;
+    }
+    
+    .button:focus {
+      outline: 2px solid var(--focus-border-color);
+      outline-offset: 1px;
+    }
+  }
 }

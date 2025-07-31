@@ -1,107 +1,130 @@
 import * as React from "react";
-import * as SDK from "azure-devops-extension-sdk";
-import {
-    CommonServiceIds,
-    getClient,
-    IProjectPageService,
-} from "azure-devops-extension-api";
-import { CoreRestClient, WebApiTeam } from "azure-devops-extension-api/Core";
-import { WorkRestClient } from "azure-devops-extension-api/Work";
 import { Dropdown } from "azure-devops-ui/Dropdown";
 import { Observer } from "azure-devops-ui/Observer";
 import { DropdownMultiSelection } from "azure-devops-ui/Utilities/DropdownSelection";
 import { IListBoxItem } from "azure-devops-ui/ListBox";
+import * as SDK from "azure-devops-extension-sdk";
+import {
+  CommonServiceIds,
+  getClient,
+  IProjectPageService,
+} from "azure-devops-extension-api";
+import {
+  CoreRestClient,
+  TeamContext,
+  WebApiTeam,
+} from "azure-devops-extension-api/Core";
+import { WorkRestClient } from "azure-devops-extension-api/Work";
+
 
 interface IMultiSelectState {
-    teams: IListBoxItem<{}>[];
-    loading: boolean;
+  teams: Array<IListBoxItem<{}>>;
 }
 
-export default class DropdownMultiSelectExample extends React.Component<{}, IMultiSelectState> {
-    private selection = new DropdownMultiSelection();
+export default class PfoBoardDropdown extends React.Component<
+  {},
+  IMultiSelectState
+> {
+  private selection = new DropdownMultiSelection();
 
-    constructor(props: {}) {
-        super(props);
-        this.state = {
-            teams: [],
-            loading: true
-        };
-    }
+  constructor(props: {}) {
+    super(props);
+    this.state = { teams: [] };
+  }
 
-    public componentDidMount() {
-        this.loadTeams();
-    }
-
-    private async loadTeams() {
-        await SDK.ready();
-        const projectService = await SDK.getService<IProjectPageService>(
-            CommonServiceIds.ProjectPageService
-        );
-        const project = await projectService.getProject();
-        if (!project) {
-            this.setState({ loading: false });
-            return;
-        }
-
-        const coreClient = getClient(CoreRestClient);
-        const workClient = getClient(WorkRestClient);
-
-        const teams = await coreClient.getTeams(project.id);
-        const teamsWithBoardsPromises = teams.map(async (team: WebApiTeam) => {
-            try {
-                const boards = await workClient.getBoards({
-                    project: project.name,
-                    projectId: project.id,
-                    team: team.name,
-                    teamId: team.id
-                });
-                if (boards && boards.length > 0) {
-                    return { id: team.id, text: team.name };
-                }
-            } catch (error) {
-                console.log(`Could not get boards for team ${team.name}: ${error}`);
-            }
-            return null;
+  public componentDidMount() {
+    try {
+      SDK.ready()
+        .then(() => {
+          console.log("SDK is ready, loading project context...");
+          this.loadTeams();
+        })
+        .catch((error) => {
+          console.error("SDK ready failed: ", error);
         });
-
-        const results = await Promise.all(teamsWithBoardsPromises);
-        const teamsWithBoards = results.filter(team => team !== null) as Array<IListBoxItem<{}>>;
-
-        this.setState({ teams: teamsWithBoards, loading: false });
+    } catch (error) {
+      console.error(
+        "Error during SDK initialization or project context loading: ",
+        error
+      );
     }
+  }
 
-    public render() {
-        const { loading, teams } = this.state;
+  public render(): JSX.Element {
+    return (
+      <div style={{ margin: "4px" }}>
+        <Observer selection={this.selection}>
+          {() => {
+            return (
+              <Dropdown
+                ariaLabel="Multiselect"
+                actions={[
+                  {
+                    className: "bolt-dropdown-action-right-button",
+                    disabled: this.selection.selectedCount === 0,
+                    iconProps: { iconName: "Clear" },
+                    text: "Clear",
+                    onClick: () => {
+                      this.selection.clear();
+                    },
+                  },
+                ]}
+                className="example-dropdown"
+                items={this.state.teams}
+                selection={this.selection}
+                placeholder="Select an Option"
+                showFilterBox={true}
+              />
+            );
+          }}
+        </Observer>
+      </div>
+    );
+  }
 
-        return (
-            <div style={{ margin: "8px" }}>
-                <Observer selection={this.selection}>
-                    {() => {
-                        return (
-                            <Dropdown
-                                ariaLabel="Multiselect"
-                                actions={[
-                                    {
-                                        className: "bolt-dropdown-action-right-button",
-                                        disabled: this.selection.selectedCount === 0,
-                                        iconProps: { iconName: "Clear" },
-                                        text: "Clear",
-                                        onClick: () => {
-                                            this.selection.clear();
-                                        }
-                                    }
-                                ]}
-                                className="example-dropdown"
-                                items={teams}
-                                loading={loading}
-                                selection={this.selection}
-                                placeholder="Select a Team"
-                                showFilterBox={true}
-                            />
-                        );
-                    }}
-                </Observer>
-            </div>
-        );
+   private async loadTeams(): Promise<void> {
+    try {
+      const projectService = await SDK.getService<IProjectPageService>(
+        CommonServiceIds.ProjectPageService
+      );
+      const project = await projectService.getProject();
+
+      if (!project) {
+        console.log("Unable to retrieve Project");
+        return;
+      }
+
+      const coreClient = getClient(CoreRestClient);
+      const workClient = getClient(WorkRestClient);
+
+      const teams = await coreClient.getTeams(project.id);
+
+      const pfoBoardsPromises = teams.map(async (team: WebApiTeam) => {
+        try {
+          const boards = await workClient.getBoards({
+            projectId: project.id,
+            project: project.name,
+            teamId: team.id,
+            team: team.name,
+          });
+
+          if (boards && boards.length > 0) {
+            return { id: team.id, text: team.name };
+          }
+        } catch (error) {
+          console.log(`Could not get board for team ${team.name}: ${error}`);
+        }
+        return null;
+      });
+
+      const result = await Promise.all(pfoBoardsPromises);
+      const teamsWithBoards = result.filter((item) => item != null) as Array<
+        IListBoxItem<{}>
+      >;
+
+      this.setState({ teams: teamsWithBoards });
+    } catch (error) {
+      console.error("Failed to load PFO Teams: ", error);
     }
+  }
 }

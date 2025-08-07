@@ -2,7 +2,7 @@
     "manifestVersion": 1,
     "id": "infrasync-board-extension",
     "publisher": "InfrasyncInc",
-    "version": "1.0.13",
+    "version": "1.0.15",
     "name": "Extension Sample",
     "description": "Azure DevOps extension sample",
     "categories": [

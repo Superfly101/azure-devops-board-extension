@@ -15,25 +15,45 @@ import {
 } from "azure-devops-extension-api";
 import { WorkItemTrackingRestClient } from "azure-devops-extension-api/WorkItemTracking";
 
-import { ObservableValue } from "azure-devops-ui/Core/Observable";
 import { FormItem } from "azure-devops-ui/FormItem";
-import { TextField, TextFieldWidth } from "azure-devops-ui/TextField";
-import { AsyncEpicTagPicker } from "./epic-tag-picker";
+import { AsyncEpicTagPicker, TagItem } from "./epic-tag-picker";
 import { Button } from "azure-devops-ui/Button";
 import { ButtonGroup } from "azure-devops-ui/ButtonGroup";
 import PfoBoardDropdown from "./multi-select-dropdown";
+import { ProjectTagPicker, ProjectTagItem } from "./project-tag-picker";
 
-const errorObservable = new ObservableValue<string | undefined>("");
+// removed unused observable pattern in favor of controlled string value
 
-interface IWorkHubGroup {
+interface IWorkHubGroupState {
   projectContext: any;
   assignedWorkItems: any[];
+  projectIdInput: string;
+  projectIdValid: boolean;
+  projectSelected?: ProjectTagItem | undefined;
+  epicTags: TagItem[];
+  selectedPfoCount: number;
+  submitting: boolean;
+  touched: {
+    projectId: boolean;
+    epics: boolean;
+    pfoBoards: boolean;
+  };
 }
 
-class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
+class WorkHubGroup extends React.Component<{}, IWorkHubGroupState> {
   constructor(props: {}) {
     super(props);
-    this.state = { projectContext: undefined, assignedWorkItems: [] };
+    this.state = {
+      projectContext: undefined,
+      assignedWorkItems: [],
+      projectIdInput: "",
+      projectIdValid: false,
+      projectSelected: undefined,
+      epicTags: [],
+      selectedPfoCount: 0,
+      submitting: false,
+      touched: { projectId: false, epics: false, pfoBoards: false },
+    };
   }
 
   public componentDidMount() {
@@ -59,14 +79,16 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
   }
 
   public render(): JSX.Element {
+    const { projectIdValid, epicTags, selectedPfoCount, submitting, touched } =
+      this.state;
     return (
       <Page className="dependency-epic-hub flex-grow">
-        <Header 
-          title="Create Dependency Epic" 
+        <Header
+          title="Create Dependency Epic"
           titleSize={TitleSize.Large}
           description="Configure and create dependency epics across multiple PFO boards"
         />
-        
+
         <div className="page-content">
           <div className="form-container">
             <Card className="form-card">
@@ -74,51 +96,66 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
                 <div className="form-header">
                   <h3 className="form-title">Epic Configuration</h3>
                   <p className="form-description">
-                    Fill in the required information to create a new dependency epic
+                    Fill in the required information to create a new dependency
+                    epic
                   </p>
                 </div>
 
                 <div className="form-fields">
                   <FormItem
-                    label="Project ID"
-                    message="Enter the target project identifier"
-                    error={false}
+                    label="Project"
+                    message={
+                      touched.projectId && !projectIdValid
+                        ? "Select a valid Project work item"
+                        : "Search and select the Project work item"
+                    }
+                    error={touched.projectId && !projectIdValid}
                     className="form-field"
                   >
-                    <TextField
-                      ariaLabel="Project ID input field"
-                      placeholder="Enter project ID..."
-                      value={errorObservable}
-                      onChange={(e) => (errorObservable.value = e.target.value)}
-                      width={TextFieldWidth.auto}
+                    <ProjectTagPicker
+                      onChange={(project) => {
+                        const valid = !!project;
+                        this.setState({
+                          projectSelected: project,
+                          projectIdValid: valid,
+                          projectIdInput: project ? String(project.id) : "",
+                        });
+                      }}
                     />
                   </FormItem>
 
                   <FormItem
                     label="Source of Truth Epic ID"
                     message="Select the epic that will serve as the source of truth"
-                    error={false}
+                    error={touched.epics && epicTags.length === 0}
                     className="form-field"
                   >
-                    <AsyncEpicTagPicker />
+                    <AsyncEpicTagPicker
+                      onChange={(tags) => this.setState({ epicTags: tags })}
+                    />
                   </FormItem>
 
                   <FormItem
                     label="PFO Boards"
                     message="Choose the PFO boards where dependency epics will be created"
-                    error={false}
+                    error={touched.pfoBoards && selectedPfoCount === 0}
                     className="form-field"
                   >
-                    <PfoBoardDropdown />
+                    <PfoBoardDropdown
+                      onSelectionChange={(count) =>
+                        this.setState({ selectedPfoCount: count })
+                      }
+                    />
                   </FormItem>
                 </div>
 
                 <div className="form-actions">
                   <ButtonGroup>
                     <Button
-                      text="Create Epic"
+                      text={submitting ? "Submitting..." : "Create Epic"}
                       primary={true}
                       iconProps={{ iconName: "Add" }}
+                      disabled={submitting}
                       onClick={() => this.handleSubmit()}
                     />
                   </ButtonGroup>
@@ -132,10 +169,28 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
   }
 
   private handleSubmit = () => {
-    // TODO: Implement form submission logic
-    console.log("Creating dependency epic...");
-    alert("Creating dependency epic - implementation coming soon!");
+    this.setState(
+      {
+        touched: { projectId: true, epics: true, pfoBoards: true },
+      },
+      () => {
+        if (!this.isFormValid()) {
+          return;
+        }
+        this.setState({ submitting: true });
+        // Placeholder for future creation logic
+        setTimeout(() => {
+          this.setState({ submitting: false });
+          alert("Validation passed. Epic creation implementation coming soon.");
+        }, 500);
+      }
+    );
   };
+
+  private isFormValid(): boolean {
+    const { projectIdValid, epicTags, selectedPfoCount } = this.state;
+    return projectIdValid && epicTags.length > 0 && selectedPfoCount > 0;
+  }
 
   private async loadProjectContext(): Promise<void> {
     try {
@@ -178,6 +233,8 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
       console.error("Failed to load assigned work items: ", error);
     }
   }
+
+  // project is selected via ProjectTagPicker; validation occurs on submit
 }
 
 showRootComponent(<WorkHubGroup />);

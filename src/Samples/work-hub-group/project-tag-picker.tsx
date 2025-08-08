@@ -11,127 +11,103 @@ import {
   Wiql,
 } from "azure-devops-extension-api/WorkItemTracking";
 
-export interface TagItem {
+export interface ProjectTagItem {
   id: number;
   text: string;
 }
 
-interface EpicTagPickerProps {
-  onChange?: (tags: TagItem[]) => void;
+interface ProjectTagPickerProps {
+  onChange?: (project: ProjectTagItem | undefined) => void;
 }
 
-export const AsyncEpicTagPicker: React.FunctionComponent<
-  EpicTagPickerProps
+export const ProjectTagPicker: React.FunctionComponent<
+  ProjectTagPickerProps
 > = ({ onChange }) => {
-  const [tagItems, setTagItems] = useObservableArray<TagItem>([]);
-  const [suggestions, setSuggestions] = useObservableArray<TagItem>([]);
+  const [selected, setSelected] = useObservableArray<ProjectTagItem>([]);
+  const [suggestions, setSuggestions] = useObservableArray<ProjectTagItem>([]);
   const [suggestionsLoading, setSuggestionsLoading] =
     useObservable<boolean>(false);
   const timeoutId = React.useRef<number>(0);
 
-  const areTagsEqual = (a: TagItem, b: TagItem) => {
-    return a.id === b.id;
-  };
+  const areTagsEqual = (a: ProjectTagItem, b: ProjectTagItem) => a.id === b.id;
 
-  const convertItemToPill = (tag: TagItem) => {
-    return {
-      content: `${tag.id}: ${tag.text}`,
-      onClick: () => alert(`Clicked tag "${tag.text}"`),
-    };
-  };
+  const convertItemToPill = (tag: ProjectTagItem) => ({
+    content: `${tag.id}: ${tag.text}`,
+  });
 
   const onSearchChanged = (searchValue: string) => {
     clearTimeout(timeoutId.current);
-
     if (!searchValue) {
       setSuggestions([]);
       setSuggestionsLoading(false);
       return;
     }
-
     timeoutId.current = window.setTimeout(async () => {
       setSuggestionsLoading(true);
       try {
         const witClient = getClient(WorkItemTrackingRestClient);
         const searchId = parseInt(searchValue, 10);
         let query: Wiql;
-
         if (!isNaN(searchId)) {
           query = {
             query: `
-                            SELECT [System.Id], [System.Title]
-                            FROM WorkItems
-                            WHERE [System.WorkItemType] = 'Epic'
-                            AND [System.Id] = ${searchId}
-                        `,
+                SELECT [System.Id], [System.Title]
+                FROM WorkItems
+                WHERE [System.WorkItemType] = 'Project'
+                AND [System.Id] = ${searchId}
+            `,
           };
         } else {
           query = {
             query: `
-                            SELECT [System.Id], [System.Title]
-                            FROM WorkItems
-                            WHERE [System.WorkItemType] = 'Epic'
-                            AND [System.Title] CONTAINS '${searchValue}'
-                        `,
+                SELECT [System.Id], [System.Title]
+                FROM WorkItems
+                WHERE [System.WorkItemType] = 'Project'
+                AND [System.Title] CONTAINS '${searchValue}'
+            `,
           };
         }
-
         const queryResult = await witClient.queryByWiql(query);
         const workItemIds = queryResult.workItems.map((wi) => wi.id);
-
         if (workItemIds.length > 0) {
           const workItems = await witClient.getWorkItems(
             workItemIds,
             undefined,
             ["System.Id", "System.Title"]
           );
-          const suggestedItems = workItems.map((wi) => ({
+          const suggested = workItems.map((wi) => ({
             id: wi.id,
             text: wi.fields["System.Title"],
           }));
-          setSuggestions(
-            suggestedItems.filter(
-              (testItem) =>
-                tagItems.value.findIndex(
-                  (testSuggestion) => testSuggestion.id == testItem.id
-                ) === -1
-            )
-          );
+          setSuggestions(suggested);
         } else {
           setSuggestions([]);
         }
-      } catch (error) {
-        console.error("Error fetching epic suggestions:", error);
+      } catch (e) {
+        // Fallback to no suggestions on error
         setSuggestions([]);
       } finally {
         setSuggestionsLoading(false);
       }
-    }, 500);
+    }, 400);
   };
 
-  const onTagAdded = (tag: TagItem) => {
-    const next = [...tagItems.value, tag];
-    setTagItems(next);
-    if (onChange) {
-      onChange(next);
-    }
+  const onTagAdded = (tag: ProjectTagItem) => {
+    const next = [tag];
+    setSelected(next);
+    if (onChange) onChange(tag);
   };
 
-  const onTagRemoved = (tag: TagItem) => {
-    const next = tagItems.value.filter((x) => x.id !== tag.id);
-    setTagItems(next);
-    if (onChange) {
-      onChange(next);
-    }
+  const onTagRemoved = (_tag: ProjectTagItem) => {
+    setSelected([]);
+    if (onChange) onChange(undefined);
   };
 
-  const renderSuggestionItem = (tag: ISuggestionItemProps<TagItem>) => {
-    return (
-      <div className="body-m">
-        {tag.item.id}: {tag.item.text}
-      </div>
-    );
-  };
+  const renderSuggestionItem = (tag: ISuggestionItemProps<ProjectTagItem>) => (
+    <div className="body-m">
+      {tag.item.id}: {tag.item.text}
+    </div>
+  );
 
   return (
     <div className="flex-column">
@@ -143,10 +119,10 @@ export const AsyncEpicTagPicker: React.FunctionComponent<
         onTagAdded={onTagAdded}
         onTagRemoved={onTagRemoved}
         renderSuggestionItem={renderSuggestionItem}
-        selectedTags={tagItems}
+        selectedTags={selected}
         suggestions={suggestions}
         suggestionsLoading={suggestionsLoading}
-        ariaLabel={"Search for epics by ID or title"}
+        ariaLabel={"Search and select the Project work item by ID or title"}
       />
     </div>
   );

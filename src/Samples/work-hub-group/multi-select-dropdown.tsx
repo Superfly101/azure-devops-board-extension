@@ -16,16 +16,20 @@ import {
 } from "azure-devops-extension-api/Core";
 import { WorkRestClient } from "azure-devops-extension-api/Work";
 
-
 interface IMultiSelectState {
   teams: Array<IListBoxItem<{}>>;
 }
 
+interface PfoBoardDropdownProps {
+  onSelectionChange?: (selectedCount: number) => void;
+}
+
 export default class PfoBoardDropdown extends React.Component<
-  {},
+  PfoBoardDropdownProps,
   IMultiSelectState
 > {
   private selection = new DropdownMultiSelection();
+  private lastNotifiedCount: number = 0;
 
   constructor(props: {}) {
     super(props);
@@ -55,6 +59,14 @@ export default class PfoBoardDropdown extends React.Component<
       <div style={{ margin: "4px" }}>
         <Observer selection={this.selection}>
           {() => {
+            const selectedCount = this.selection.selectedCount;
+            if (
+              typeof this.props.onSelectionChange === "function" &&
+              selectedCount !== this.lastNotifiedCount
+            ) {
+              this.lastNotifiedCount = selectedCount;
+              this.props.onSelectionChange(selectedCount);
+            }
             return (
               <Dropdown
                 ariaLabel="Multiselect"
@@ -82,7 +94,7 @@ export default class PfoBoardDropdown extends React.Component<
     );
   }
 
-   private async loadTeams(): Promise<void> {
+  private async loadTeams(): Promise<void> {
     try {
       const projectService = await SDK.getService<IProjectPageService>(
         CommonServiceIds.ProjectPageService

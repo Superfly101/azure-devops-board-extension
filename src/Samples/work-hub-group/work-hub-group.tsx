@@ -21,6 +21,7 @@ import { TextField, TextFieldWidth } from "azure-devops-ui/TextField";
 import { AsyncEpicTagPicker } from "./epic-tag-picker";
 import { Button } from "azure-devops-ui/Button";
 import { ButtonGroup } from "azure-devops-ui/ButtonGroup";
+import { IListBoxItem } from "azure-devops-ui/ListBox";
 import PfoBoardDropdown from "./multi-select-dropdown";
 
 const errorObservable = new ObservableValue<string | undefined>("");
@@ -30,7 +31,15 @@ interface IWorkHubGroup {
   assignedWorkItems: any[];
 }
 
+interface TagItem {
+  id: number;
+  text: string;
+}
+
 class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
+  private selectedEpics: TagItem[] = [];
+  private selectedPfoBoards: Array<IListBoxItem<{}>> = [];
+
   constructor(props: {}) {
     super(props);
     this.state = { projectContext: undefined, assignedWorkItems: [] };
@@ -100,7 +109,7 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
                     error={false}
                     className="form-field"
                   >
-                    <AsyncEpicTagPicker />
+                    <AsyncEpicTagPicker onSelectionChange={(tags) => this.selectedEpics = tags} />
                   </FormItem>
 
                   <FormItem
@@ -109,7 +118,7 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
                     error={false}
                     className="form-field"
                   >
-                    <PfoBoardDropdown />
+                    <PfoBoardDropdown onSelectionChange={(boards) => this.selectedPfoBoards = boards} />
                   </FormItem>
                 </div>
 
@@ -132,9 +141,18 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
   }
 
   private handleSubmit = () => {
-    // TODO: Implement form submission logic
-    console.log("Creating dependency epic...");
-    alert("Creating dependency epic - implementation coming soon!");
+    console.log("=== Form Values ===");
+    
+    // Project ID from TextField
+    console.log("Project ID:", errorObservable.value);
+    
+    // Selected Epic Tags
+    console.log("Selected Epic Tags:", this.selectedEpics);
+    
+    // Selected PFO Boards
+    console.log("Selected PFO Boards:", this.selectedPfoBoards);
+    
+    console.log("===================");
   };
 
   private async loadProjectContext(): Promise<void> {

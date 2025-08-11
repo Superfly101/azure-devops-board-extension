@@ -16,18 +16,21 @@ import {
 } from "azure-devops-extension-api/Core";
 import { WorkRestClient } from "azure-devops-extension-api/Work";
 
-
 interface IMultiSelectState {
   teams: Array<IListBoxItem<{}>>;
 }
 
+interface PfoBoardDropdownProps {
+  onSelectionChange?: (selectedItems: Array<IListBoxItem<{}>>) => void;
+}
+
 export default class PfoBoardDropdown extends React.Component<
-  {},
+  PfoBoardDropdownProps,
   IMultiSelectState
 > {
   private selection = new DropdownMultiSelection();
 
-  constructor(props: {}) {
+  constructor(props: PfoBoardDropdownProps) {
     super(props);
     this.state = { teams: [] };
   }
@@ -38,6 +41,7 @@ export default class PfoBoardDropdown extends React.Component<
         .then(() => {
           console.log("SDK is ready, loading project context...");
           this.loadTeams();
+          this.setupSelectionChangeListener();
         })
         .catch((error) => {
           console.error("SDK ready failed: ", error);
@@ -49,6 +53,23 @@ export default class PfoBoardDropdown extends React.Component<
       );
     }
   }
+
+  private setupSelectionChangeListener = () => {
+    this.selection.subscribe(() => {
+      if (this.props.onSelectionChange) {
+        // Map selection ranges back to actual items
+        const selectedItems: Array<IListBoxItem<{}>> = [];
+        this.selection.value.forEach(range => {
+          for (let i = range.beginIndex; i <= range.endIndex; i++) {
+            if (this.state.teams[i]) {
+              selectedItems.push(this.state.teams[i]);
+            }
+          }
+        });
+        this.props.onSelectionChange(selectedItems);
+      }
+    });
+  };
 
   public render(): JSX.Element {
     return (

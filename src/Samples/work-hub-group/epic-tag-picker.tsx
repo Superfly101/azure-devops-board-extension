@@ -10,7 +10,11 @@ interface TagItem {
     text: string;
 }
 
-export const AsyncEpicTagPicker: React.FunctionComponent<{}> = () => {
+interface AsyncEpicTagPickerProps {
+    onSelectionChange?: (selectedTags: TagItem[]) => void;
+}
+
+export const AsyncEpicTagPicker: React.FunctionComponent<AsyncEpicTagPickerProps> = ({ onSelectionChange }) => {
     const [tagItems, setTagItems] = useObservableArray<TagItem>([]);
     const [suggestions, setSuggestions] = useObservableArray<TagItem>([]);
     const [suggestionsLoading, setSuggestionsLoading] = useObservable<boolean>(true);
@@ -88,11 +92,19 @@ export const AsyncEpicTagPicker: React.FunctionComponent<{}> = () => {
     };
 
     const onTagAdded = (tag: TagItem) => {
-        setTagItems([...tagItems.value, tag]);
+        const newTags = [...tagItems.value, tag];
+        setTagItems(newTags);
+        if (onSelectionChange) {
+            onSelectionChange(newTags);
+        }
     };
 
     const onTagRemoved = (tag: TagItem) => {
-        setTagItems(tagItems.value.filter(x => x.id !== tag.id));
+        const newTags = tagItems.value.filter(x => x.id !== tag.id);
+        setTagItems(newTags);
+        if (onSelectionChange) {
+            onSelectionChange(newTags);
+        }
     };
 
     const renderSuggestionItem = (tag: ISuggestionItemProps<TagItem>) => {

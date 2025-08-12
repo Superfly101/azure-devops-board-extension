@@ -1,3 +1,5 @@
+// multi-select-dropdown.tsx
+
 import * as React from "react";
 import { Dropdown } from "azure-devops-ui/Dropdown";
 import { Observer } from "azure-devops-ui/Observer";
@@ -22,6 +24,7 @@ interface IMultiSelectState {
 
 interface PfoBoardDropdownProps {
   onSelectionChange?: (selectedItems: Array<IListBoxItem<{}>>) => void;
+  disabled?: boolean;
 }
 
 export default class PfoBoardDropdown extends React.Component<
@@ -56,7 +59,7 @@ export default class PfoBoardDropdown extends React.Component<
 
   private setupSelectionChangeListener = () => {
     this.selection.subscribe(() => {
-      if (this.props.onSelectionChange) {
+      if (this.props.onSelectionChange && !this.props.disabled) {
         // Map selection ranges back to actual items
         const selectedItems: Array<IListBoxItem<{}>> = [];
         this.selection.value.forEach(range => {
@@ -72,6 +75,8 @@ export default class PfoBoardDropdown extends React.Component<
   };
 
   public render(): JSX.Element {
+    const { disabled = false } = this.props;
+    
     return (
       <div style={{ margin: "4px" }}>
         <Observer selection={this.selection}>
@@ -82,19 +87,22 @@ export default class PfoBoardDropdown extends React.Component<
                 actions={[
                   {
                     className: "bolt-dropdown-action-right-button",
-                    disabled: this.selection.selectedCount === 0,
+                    disabled: disabled || this.selection.selectedCount === 0,
                     iconProps: { iconName: "Clear" },
                     text: "Clear",
                     onClick: () => {
-                      this.selection.clear();
+                      if (!disabled) {
+                        this.selection.clear();
+                      }
                     },
                   },
                 ]}
-                className="example-dropdown"
+                className={`example-dropdown ${disabled ? 'disabled' : ''}`}
                 items={this.state.teams}
                 selection={this.selection}
-                placeholder="Select an Option"
-                showFilterBox={true}
+                placeholder={disabled ? "Creating epics..." : "Select an Option"}
+                showFilterBox={!disabled}
+                disabled={disabled}
               />
             );
           }}
@@ -103,7 +111,7 @@ export default class PfoBoardDropdown extends React.Component<
     );
   }
 
-   private async loadTeams(): Promise<void> {
+  private async loadTeams(): Promise<void> {
     try {
       const projectService = await SDK.getService<IProjectPageService>(
         CommonServiceIds.ProjectPageService

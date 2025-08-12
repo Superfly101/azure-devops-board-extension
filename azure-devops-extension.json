@@ -2,7 +2,7 @@
     "manifestVersion": 1,
     "id": "infrasync-board-extension-dev",
     "publisher": "InfrasyncInc",
-    "version": "1.0.1",
+    "version": "1.0.12",
     "name": "Create Dependency Epic",
     "description": "Azure DevOps extension to create a dependency epic from a work item.",
     "categories": [

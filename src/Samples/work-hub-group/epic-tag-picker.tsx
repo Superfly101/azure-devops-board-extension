@@ -1,3 +1,5 @@
+// epic-tag-picker.tsx
+
 import * as React from "react";
 import { TagPicker } from "azure-devops-ui/TagPicker";
 import { useObservableArray, useObservable } from "azure-devops-ui/Core/Observable";
@@ -12,9 +14,13 @@ interface TagItem {
 
 interface AsyncEpicTagPickerProps {
     onSelectionChange?: (selectedTags: TagItem[]) => void;
+    disabled?: boolean;
 }
 
-export const AsyncEpicTagPicker: React.FunctionComponent<AsyncEpicTagPickerProps> = ({ onSelectionChange }) => {
+export const AsyncEpicTagPicker: React.FunctionComponent<AsyncEpicTagPickerProps> = ({ 
+    onSelectionChange, 
+    disabled = false 
+}) => {
     const [tagItems, setTagItems] = useObservableArray<TagItem>([]);
     const [suggestions, setSuggestions] = useObservableArray<TagItem>([]);
     const [suggestionsLoading, setSuggestionsLoading] = useObservable<boolean>(true);
@@ -27,11 +33,13 @@ export const AsyncEpicTagPicker: React.FunctionComponent<AsyncEpicTagPickerProps
     const convertItemToPill = (tag: TagItem) => {
         return {
             content: `${tag.id}: ${tag.text}`,
-            onClick: () => alert(`Clicked tag "${tag.text}"`)
+            onClick: disabled ? undefined : () => alert(`Clicked tag "${tag.text}"`)
         };
     };
 
     const onSearchChanged = (searchValue: string) => {
+        if (disabled) return;
+        
         clearTimeout(timeoutId.current);
 
         if (!searchValue) {
@@ -92,6 +100,8 @@ export const AsyncEpicTagPicker: React.FunctionComponent<AsyncEpicTagPickerProps
     };
 
     const onTagAdded = (tag: TagItem) => {
+        if (disabled) return;
+        
         const newTags = [...tagItems.value, tag];
         setTagItems(newTags);
         if (onSelectionChange) {
@@ -100,6 +110,8 @@ export const AsyncEpicTagPicker: React.FunctionComponent<AsyncEpicTagPickerProps
     };
 
     const onTagRemoved = (tag: TagItem) => {
+        if (disabled) return;
+        
         const newTags = tagItems.value.filter(x => x.id !== tag.id);
         setTagItems(newTags);
         if (onSelectionChange) {
@@ -112,7 +124,7 @@ export const AsyncEpicTagPicker: React.FunctionComponent<AsyncEpicTagPickerProps
     };
 
     return (
-        <div className="flex-column">
+        <div className={`flex-column ${disabled ? 'disabled' : ''}`}>
             <TagPicker
                 areTagsEqual={areTagsEqual}
                 convertItemToPill={convertItemToPill}
@@ -125,6 +137,7 @@ export const AsyncEpicTagPicker: React.FunctionComponent<AsyncEpicTagPickerProps
                 suggestions={suggestions}
                 suggestionsLoading={suggestionsLoading}
                 ariaLabel={"Search for epics by ID or title"}
+                
             />
         </div>
     );

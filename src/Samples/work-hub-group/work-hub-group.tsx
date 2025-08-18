@@ -13,10 +13,7 @@ import {
   IProjectPageService,
   getClient,
 } from "azure-devops-extension-api";
-import {
-  WorkItemTrackingRestClient,
-  WorkItem,
-} from "azure-devops-extension-api/WorkItemTracking";
+import { WorkItemTrackingRestClient } from "azure-devops-extension-api/WorkItemTracking";
 
 import { ObservableValue } from "azure-devops-ui/Core/Observable";
 import { FormItem } from "azure-devops-ui/FormItem";
@@ -24,61 +21,28 @@ import { TextField, TextFieldWidth } from "azure-devops-ui/TextField";
 import { AsyncEpicTagPicker } from "./epic-tag-picker";
 import { Button } from "azure-devops-ui/Button";
 import { ButtonGroup } from "azure-devops-ui/ButtonGroup";
+import PfoBoardDropdown from "./pfo-board-dropdown";
 import { IListBoxItem } from "azure-devops-ui/ListBox";
-import PfoBoardDropdown from "./multi-select-dropdown";
-import { MessageCard, MessageCardSeverity } from "azure-devops-ui/MessageCard";
-import {
-  JsonPatchOperation,
-  Operation,
-  JsonPatchDocument,
-} from "azure-devops-extension-api/WebApi";
+import { JsonPatchDocument } from "azure-devops-extension-api/WebApi";
 
 const projectIdObservable = new ObservableValue<string | undefined>("");
 
 interface IWorkHubGroup {
   projectContext: any;
   assignedWorkItems: any[];
-  isCreating: boolean;
-  lastOperationMessage: string;
-  lastOperationSeverity: MessageCardSeverity;
-  validationErrors: ValidationErrors;
-  hasAttemptedSubmit: boolean;
 }
-
-interface ValidationErrors {
-  projectId?: string;
-  selectedEpics?: string;
-  selectedPfoBoards?: string;
-}
-
 interface TagItem {
   id: number;
   text: string;
 }
 
-interface EpicCreationResult {
-  sourceEpic: TagItem;
-  targetTeam: IListBoxItem<{}>;
-  success: boolean;
-  workItem?: WorkItem;
-  error?: string;
-}
-
 class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
   private selectedEpics: TagItem[] = [];
-  private selectedPfoBoards: Array<IListBoxItem<{}>> = [];
+  private selectedBoards: Array<IListBoxItem<{ areaPath: string }>> = [];
 
   constructor(props: {}) {
     super(props);
-    this.state = {
-      projectContext: undefined,
-      assignedWorkItems: [],
-      isCreating: false,
-      lastOperationMessage: "",
-      lastOperationSeverity: MessageCardSeverity.Info,
-      validationErrors: {},
-      hasAttemptedSubmit: false,
-    };
+    this.state = { projectContext: undefined, assignedWorkItems: [] };
   }
 
   public componentDidMount() {
@@ -90,7 +54,6 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
         .then(() => {
           console.log("SDK is ready, loading project context...");
           this.loadProjectContext();
-          this.loadAssignedWorkItems();
         })
         .catch((error) => {
           console.error("SDK ready failed: ", error);
@@ -124,86 +87,50 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
                   </p>
                 </div>
 
-                {this.state.lastOperationMessage && (
-                  <MessageCard
-                    className="example-error-message"
-                    severity={this.state.lastOperationSeverity}
-                  >
-                    {this.state.lastOperationMessage}
-                  </MessageCard>
-                )}
-
                 <div className="form-fields">
                   <FormItem
                     label="Project ID"
-                    message={
-                      this.state.validationErrors.projectId ||
-                      "Enter the target project identifier"
-                    }
-                    error={!!this.state.validationErrors.projectId}
+                    message="Enter the target project identifier"
+                    error={false}
                     className="form-field"
                   >
                     <TextField
                       ariaLabel="Project ID input field"
                       placeholder="Enter project ID..."
                       value={projectIdObservable}
-                      onChange={(e) => {
-                        projectIdObservable.value = e.target.value;
-                        this.clearValidationError("projectId");
-                      }}
+                      onChange={(e) =>
+                        (projectIdObservable.value = e.target.value)
+                      }
                       width={TextFieldWidth.auto}
                     />
                   </FormItem>
 
                   <FormItem
                     label="Source of Truth Epic ID"
-                    message={
-                      this.state.validationErrors.selectedEpics ||
-                      "Select the epic that will serve as the source of truth"
-                    }
-                    error={!!this.state.validationErrors.selectedEpics}
+                    message="Select the epic that will serve as the source of truth"
+                    error={false}
                     className="form-field"
                   >
-                    <AsyncEpicTagPicker
-                      onSelectionChange={(tags) => {
-                        this.selectedEpics = tags;
-                        this.clearValidationError("selectedEpics");
-                      }}
-                    />
+                    <AsyncEpicTagPicker onSelect={this.handleEpicSelection} />
                   </FormItem>
 
                   <FormItem
                     label="PFO Boards"
-                    message={
-                      this.state.validationErrors.selectedPfoBoards ||
-                      "Choose the PFO boards where dependency epics will be created"
-                    }
-                    error={!!this.state.validationErrors.selectedPfoBoards}
+                    message="Choose the PFO boards where dependency epics will be created"
+                    error={false}
                     className="form-field"
                   >
-                    <PfoBoardDropdown
-                      onSelectionChange={(boards) => {
-                        this.selectedPfoBoards = boards;
-                        this.clearValidationError("selectedPfoBoards");
-                      }}
-                    />
+                    <PfoBoardDropdown onSelect={this.handleBoardSelection} />
                   </FormItem>
                 </div>
 
                 <div className="form-actions">
                   <ButtonGroup>
                     <Button
-                      text={
-                        this.state.isCreating
-                          ? "Creating Epics..."
-                          : "Create Epic"
-                      }
+                      text="Create Epic"
                       primary={true}
-                      iconProps={{
-                        iconName: this.state.isCreating ? "Sync" : "Add",
-                      }}
+                      iconProps={{ iconName: "Add" }}
                       onClick={() => this.handleSubmit()}
-                      disabled={this.state.isCreating}
                     />
                   </ButtonGroup>
                 </div>
@@ -215,295 +142,117 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
     );
   }
 
-  private clearValidationError = (field: keyof ValidationErrors) => {
-    if (this.state.hasAttemptedSubmit && this.state.validationErrors[field]) {
-      this.setState({
-        validationErrors: {
-          ...this.state.validationErrors,
-          [field]: undefined,
-        },
-      });
-    }
-  };
-
-  private validateForm = (): ValidationErrors => {
-    const errors: ValidationErrors = {};
-
-    if (!projectIdObservable.value?.trim()) {
-      errors.projectId = "Project ID is required";
-    }
-
-    if (this.selectedEpics.length === 0) {
-      errors.selectedEpics = "At least one source epic must be selected";
-    }
-
-    if (this.selectedPfoBoards.length === 0) {
-      errors.selectedPfoBoards = "At least one PFO board must be selected";
-    }
-
-    return errors;
-  };
-
   private handleSubmit = async () => {
-    this.setState({ hasAttemptedSubmit: true });
+    console.log("Creating dependency epic...");
+    console.log("###### Form Values ######");
 
-    const validationErrors = this.validateForm();
-
-    if (Object.keys(validationErrors).length > 0) {
-      this.setState({
-        validationErrors,
-        lastOperationMessage: "Please fix the validation errors above",
-        lastOperationSeverity: MessageCardSeverity.Error,
-      });
-      return;
-    }
-
-    // Clear any previous validation errors
-    this.setState({
-      validationErrors: {},
-      lastOperationMessage: "",
-      lastOperationSeverity: MessageCardSeverity.Info,
-    });
-
-    console.log("=== Form Values ===");
     console.log("Project ID:", projectIdObservable.value);
-    console.log("Selected Epic Tags:", this.selectedEpics);
-    console.log("Selected PFO Boards:", this.selectedPfoBoards);
-    console.log("===================");
 
-    this.setState({
-      isCreating: true,
-    });
+    console.log("Selected Epics:", this.selectedEpics);
 
-    try {
-      const results = await this.createDependencyEpics();
-      this.handleCreationResults(results);
-    } catch (error) {
-      console.error("Error creating dependency epics:", error);
-      this.setState({
-        isCreating: false,
-        lastOperationMessage: `Failed to create dependency epics: ${
-          error.message || error
-        }`,
-        lastOperationSeverity: MessageCardSeverity.Error,
-      });
-    }
+    console.log("Select Boards:", this.selectedBoards);
+
+    await this.createDependcyEpics();
+
   };
 
-  private createDependencyEpics = async (): Promise<EpicCreationResult[]> => {
-    const results: EpicCreationResult[] = [];
+  private createDependcyEpics = async () => {
     const witClient = getClient(WorkItemTrackingRestClient);
     const projectId = projectIdObservable.value?.trim();
 
-    // For each source epic, create dependency epics on each PFO board
-    for (const sourceEpic of this.selectedEpics) {
-      for (const pfoBoard of this.selectedPfoBoards) {
+    for (const board of this.selectedBoards) {
+      for (const leadEpic of this.selectedEpics) {
         try {
           console.log(
-            `Creating dependency epic for source ${sourceEpic.id} on team ${pfoBoard.text}`
+            `Creating dependency epic for Lead Epic ${leadEpic.id} on team ${board.text}`
           );
+         console.log("Area Path:", board.data?.areaPath || board)
+          const dependencyEpicTitle = `DEPENDENCY: ${leadEpic.text}`;
+          const organization = SDK.getHost().name;
+          const baseUrl = `https://dev.azure.com/${organization}/${this.state.projectContext.id}/_apis/wit/workItems`;
+          const patchOperations: JsonPatchDocument = [
+            {
+              op: "add",
+              path: "/fields/System.Title",
+              value: dependencyEpicTitle,
+            },
+            {
+              op: "add",
+              path: "/fields/System.AreaPath",
+              value: board.data?.areaPath || board.text,
+            },
+            {
+              op: "add",
+              path: "/relations/-",
+              value: {
+                rel: "System.LinkTypes.Hierarchy-Reverse",
+                url: `${baseUrl}/${projectId}`,
+                attributes: {
+                  name: "Parent",
+                  comment: "Parent project relationship",
+                },
+              },
+            },
+            {
+              op: "add",
+              path: "/relations/-",
+              value: {
+                rel: "System.LinkTypes.Dependency-Forward",
+                url: `${baseUrl}/${leadEpic.id}`,
+                attributes: {
+                  name: "Successor",
+                  comment: "Dependency lead epic relationship",
+                },
+              },
+            },
+          ];
 
-          // Create the dependency epic work item
-          const workItem = await this.createDependencyEpic(
-            witClient,
-            sourceEpic,
-            pfoBoard,
-            projectId!
+          console.log("Patch Operations:", patchOperations);
+
+          const dependencyEpic = await witClient.createWorkItem(
+            patchOperations,
+            this.state.projectContext.id,
+            "Epic"
           );
+          console.log("Dependency Epic Created:", dependencyEpic);
 
-          results.push({
-            sourceEpic,
-            targetTeam: pfoBoard,
-            success: true,
-            workItem,
-          });
+          // const relationOperations: JsonPatchDocument = [
+          //   {
+          //     op: "add",
+          //     path: "/relations/-",
+          //     value: {
+          //       rel: "System.LinkTypes.Hierarchy-Reverse",
+          //       url: parentUrl,
+          //       attributes: {
+          //         isLocked: false,
+          //         name: "Parent",
+          //         comment: "Parent project relationship",
+          //       },
+          //     },
+          //   },
+          //   {
+          //     op: "add",
+          //     path: "/relations/-",
+          //     value: {
+          //       rel: "System.LinkTypes.Dependency-Forward",
+          //       url: parentUrl,
+          //       attributes: {
+          //         isLocked: false,
+          //         name: "Successor",
+          //         comment: "Dependency lead epic relationship",
+          //       },
+          //     },
+          //   },
+          // ];
 
-          console.log(
-            `Successfully created dependency epic ${workItem.id} for source ${sourceEpic.id}`
-          );
+          // console.log("Relation Operations:", relationOperations);
+
+          // await witClient.updateWorkItem(relationOperations, dependencyEpic.id, this.state.projectContext.id);
         } catch (error) {
-          console.error(
-            `Failed to create dependency epic for source ${sourceEpic.id} on team ${pfoBoard.text}:`,
-            error
-          );
-          results.push({
-            sourceEpic,
-            targetTeam: pfoBoard,
-            success: false,
-            error: error.message || error.toString(),
-          });
+          console.log(`Failed to create dependency epic for Lead Epic ${leadEpic.id} on team ${board.text}`)
         }
       }
     }
-
-    return results;
-  };
-
-  private createDependencyEpic = async (
-    witClient: WorkItemTrackingRestClient,
-    sourceEpic: TagItem,
-    targetTeam: IListBoxItem<{}>,
-    projectId: string
-  ): Promise<WorkItem> => {
-    const dependencyTitle = `DEPENDENCY: ${sourceEpic.text}`;
-
-    // Create the JSON patch operations for the new work item
-    const patchOperations: JsonPatchDocument = [
-      {
-        op: "add",
-        path: "/fields/System.Title",
-        value: dependencyTitle,
-      },
-    ];
-
-    // const patchOperations: JsonPatchDocument = [
-    //   {
-    //     op: "add",
-    //     path: "/fields/System.Title",
-    //     value: dependencyTitle,
-    //   },
-    //   // Set area path to the target team (if available)
-    //   {
-    //     op: "add",
-    //     path: "/fields/System.AreaPath",
-    //     value: `${this.state.projectContext?.name}\\${targetTeam.text}`,
-    //   },
-    //   // Set iteration path to current project
-    //   {
-    //     op: "add",
-    //     path: "/fields/System.IterationPath",
-    //     value: this.state.projectContext?.name || "",
-    //   },
-    // ];
-
-    console.log("Patch Operations:", patchOperations);
-
-    console.log("Project Context:", this.state.projectContext);
-
-    // Create the work item
-    const newWorkItem = await witClient.createWorkItem(
-      patchOperations,
-      this.state.projectContext.id,
-      "Epic"
-    );
-
-    console.log("New WorkItem:", newWorkItem);
-    // Now add the relationships (Parent and Successor links)
-    await this.addWorkItemRelations(
-      witClient,
-      newWorkItem.id,
-      sourceEpic.id,
-      parseInt(projectId)
-    );
-
-    return newWorkItem;
-  };
-
-  private addWorkItemRelations = async (
-    witClient: WorkItemTrackingRestClient,
-    dependencyEpicId: number,
-    sourceEpicId: number,
-    parentProjectId: number
-  ): Promise<void> => {
-    // const relationOperations: JsonPatchDocument = [
-    //   // Add SUCCESSOR link to source epic
-    //   {
-    //     op: "add",
-    //     path: "/relations/-",
-    //     value: {
-    //       rel: "Microsoft.VSTS.Common.Successor",
-    //       url: `${this.getWorkItemUrl(sourceEpicId)}`,
-    //       attributes: {
-    //         comment: "Dependency relationship to source of truth epic",
-    //       },
-    //     },
-    //   },
-    //   // Add PARENT link to project (if valid work item ID)
-    //   {
-    //     op: "add",
-    //     path: "/relations/-",
-    //     value: {
-    //       rel: "System.LinkTypes.Hierarchy-Reverse",
-    //       url: `${this.getWorkItemUrl(parentProjectId)}`,
-    //       attributes: {
-    //         comment: "Parent project relationship",
-    //       },
-    //     },
-    //   },
-    // ];
-
-    const relationOperations: JsonPatchDocument = [
-      // Add PARENT link to project (if valid work item ID)
-      {
-        op: "add",
-        path: "/relations/-",
-        value: {
-          rel: "System.LinkTypes.Hierarchy-Reverse",
-          url: `${this.getWorkItemUrl(parentProjectId)}`,
-          attributes: {
-            isLocked: false,
-            name: "Parent",
-            comment: "Parent project relationship",
-          },
-        },
-      },
-    ];
-
-    // Update the work item with relations
-    await witClient.updateWorkItem(
-      relationOperations,
-      dependencyEpicId,
-      this.state.projectContext.id
-    );
-  };
-
-  private getWorkItemUrl = (workItemId: number): string => {
-    // Get the base URL for work items in this Azure DevOps organization
-    const organization = SDK.getHost().name;
-    return `https://dev.azure.com/${organization}/${this.state.projectContext.id}/_apis/wit/workItems/${workItemId}`;
-  };
-
-  private handleCreationResults = (results: EpicCreationResult[]) => {
-    const successCount = results.filter((r) => r.success).length;
-    const failCount = results.filter((r) => !r.success).length;
-
-    let message: string;
-    let severity: MessageCardSeverity;
-
-    if (failCount === 0) {
-      message = `Successfully created ${successCount} dependency epic${
-        successCount !== 1 ? "s" : ""
-      }!`;
-      severity = MessageCardSeverity.Info;
-    } else if (successCount === 0) {
-      message = `Failed to create all ${failCount} dependency epics. Check console for details.`;
-      severity = MessageCardSeverity.Error;
-    } else {
-      message = `Created ${successCount} dependency epics successfully, but ${failCount} failed. Check console for details.`;
-      severity = MessageCardSeverity.Warning;
-    }
-
-    // Log detailed results
-    console.log("=== Epic Creation Results ===");
-    results.forEach((result, index) => {
-      console.log(
-        `${index + 1}. Source Epic: ${result.sourceEpic.text} -> Team: ${
-          result.targetTeam.text
-        }`
-      );
-      if (result.success) {
-        console.log(`Success: Created Epic ID ${result.workItem?.id}`);
-      } else {
-        console.log(`Failed: ${result.error}`);
-      }
-    });
-    console.log("==============================");
-
-    this.setState({
-      isCreating: false,
-      lastOperationMessage: message,
-      lastOperationSeverity: severity,
-    });
   };
 
   private async loadProjectContext(): Promise<void> {
@@ -521,32 +270,13 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
     }
   }
 
-  private async loadAssignedWorkItems(): Promise<void> {
-    try {
-      const client = getClient(WorkItemTrackingRestClient);
+  private handleEpicSelection = (epics: TagItem[]) => {
+    this.selectedEpics = epics;
+  };
 
-      const wiqlQuery = {
-        query: `
-                    SELECT [System.Id], [System.Title]
-                    FROM WorkItems
-                    WHERE [System.AssignedTo] = @Me
-                    ORDER BY [System.ChangedDate] DESC
-                    `,
-      };
-
-      const queryResult = await client.queryByWiql(wiqlQuery);
-      const workItemIds = queryResult.workItems.map((wi) => wi.id);
-
-      if (workItemIds.length > 0) {
-        const workItems = await client.getWorkItems(workItemIds);
-        this.setState({ assignedWorkItems: workItems });
-      } else {
-        this.setState({ assignedWorkItems: [] });
-      }
-    } catch (error) {
-      console.error("Failed to load assigned work items: ", error);
-    }
-  }
+  private handleBoardSelection = (boards: Array<IListBoxItem<{ areaPath: string }>>) => {
+    this.selectedBoards = boards;
+  };
 }
 
 showRootComponent(<WorkHubGroup />);

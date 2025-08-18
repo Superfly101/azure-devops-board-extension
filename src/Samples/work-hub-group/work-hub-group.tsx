@@ -30,7 +30,13 @@ const projectIdObservable = new ObservableValue<string | undefined>("");
 interface IWorkHubGroup {
   projectContext: any;
   assignedWorkItems: any[];
+  validationErrors: {
+    projectId: boolean;
+    epics: boolean;
+    boards: boolean;
+  };
 }
+
 interface TagItem {
   id: number;
   text: string;
@@ -42,7 +48,15 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
 
   constructor(props: {}) {
     super(props);
-    this.state = { projectContext: undefined, assignedWorkItems: [] };
+    this.state = { 
+      projectContext: undefined, 
+      assignedWorkItems: [],
+      validationErrors: {
+        projectId: false,
+        epics: false,
+        boards: false,
+      }
+    };
   }
 
   public componentDidMount() {
@@ -90,25 +104,34 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
                 <div className="form-fields">
                   <FormItem
                     label="Project ID"
-                    message="Enter the target project identifier"
-                    error={false}
+                    message={this.state.validationErrors.projectId ? "Project ID is required" : "Enter the target project identifier"}
+                    error={this.state.validationErrors.projectId}
                     className="form-field"
                   >
                     <TextField
                       ariaLabel="Project ID input field"
                       placeholder="Enter project ID..."
                       value={projectIdObservable}
-                      onChange={(e) =>
-                        (projectIdObservable.value = e.target.value)
-                      }
+                      onChange={(e) => {
+                        projectIdObservable.value = e.target.value;
+                        // Clear error when user starts typing
+                        if (this.state.validationErrors.projectId && e.target.value.trim()) {
+                          this.setState({
+                            validationErrors: {
+                              ...this.state.validationErrors,
+                              projectId: false
+                            }
+                          });
+                        }
+                      }}
                       width={TextFieldWidth.auto}
                     />
                   </FormItem>
 
                   <FormItem
                     label="Source of Truth Epic ID"
-                    message="Select the epic that will serve as the source of truth"
-                    error={false}
+                    message={this.state.validationErrors.epics ? "At least one epic must be selected" : "Select the epic that will serve as the source of truth"}
+                    error={this.state.validationErrors.epics}
                     className="form-field"
                   >
                     <AsyncEpicTagPicker onSelect={this.handleEpicSelection} />
@@ -116,8 +139,8 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
 
                   <FormItem
                     label="PFO Boards"
-                    message="Choose the PFO boards where dependency epics will be created"
-                    error={false}
+                    message={this.state.validationErrors.boards ? "At least one board must be selected" : "Choose the PFO boards where dependency epics will be created"}
+                    error={this.state.validationErrors.boards}
                     className="form-field"
                   >
                     <PfoBoardDropdown onSelect={this.handleBoardSelection} />
@@ -142,18 +165,41 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
     );
   }
 
+  private validateForm = (): boolean => {
+    const projectIdValue = projectIdObservable.value?.trim();
+    const hasProjectId = Boolean(projectIdValue);
+    const hasEpics = this.selectedEpics.length > 0;
+    const hasBoards = this.selectedBoards.length > 0;
+
+    const validationErrors = {
+      projectId: !hasProjectId,
+      epics: !hasEpics,
+      boards: !hasBoards,
+    };
+
+    this.setState({ validationErrors });
+
+    return hasProjectId && hasEpics && hasBoards;
+  };
+
   private handleSubmit = async () => {
+    console.log("Validating form...");
+    
+    const isValid = this.validateForm();
+    
+    if (!isValid) {
+      console.log("Form validation failed");
+      return;
+    }
+
     console.log("Creating dependency epic...");
     console.log("###### Form Values ######");
 
     console.log("Project ID:", projectIdObservable.value);
-
     console.log("Selected Epics:", this.selectedEpics);
-
     console.log("Select Boards:", this.selectedBoards);
 
     await this.createDependcyEpics();
-
   };
 
   private createDependcyEpics = async () => {
@@ -215,39 +261,6 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
             "Epic"
           );
           console.log("Dependency Epic Created:", dependencyEpic);
-
-          // const relationOperations: JsonPatchDocument = [
-          //   {
-          //     op: "add",
-          //     path: "/relations/-",
-          //     value: {
-          //       rel: "System.LinkTypes.Hierarchy-Reverse",
-          //       url: parentUrl,
-          //       attributes: {
-          //         isLocked: false,
-          //         name: "Parent",
-          //         comment: "Parent project relationship",
-          //       },
-          //     },
-          //   },
-          //   {
-          //     op: "add",
-          //     path: "/relations/-",
-          //     value: {
-          //       rel: "System.LinkTypes.Dependency-Forward",
-          //       url: parentUrl,
-          //       attributes: {
-          //         isLocked: false,
-          //         name: "Successor",
-          //         comment: "Dependency lead epic relationship",
-          //       },
-          //     },
-          //   },
-          // ];
-
-          // console.log("Relation Operations:", relationOperations);
-
-          // await witClient.updateWorkItem(relationOperations, dependencyEpic.id, this.state.projectContext.id);
         } catch (error) {
           console.log(`Failed to create dependency epic for Lead Epic ${leadEpic.id} on team ${board.text}`)
         }
@@ -272,10 +285,30 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
 
   private handleEpicSelection = (epics: TagItem[]) => {
     this.selectedEpics = epics;
+    
+    // Clear error when epics are selected
+    if (this.state.validationErrors.epics && epics.length > 0) {
+      this.setState({
+        validationErrors: {
+          ...this.state.validationErrors,
+          epics: false
+        }
+      });
+    }
   };
 
   private handleBoardSelection = (boards: Array<IListBoxItem<{ areaPath: string }>>) => {
     this.selectedBoards = boards;
+    
+    // Clear error when boards are selected
+    if (this.state.validationErrors.boards && boards.length > 0) {
+      this.setState({
+        validationErrors: {
+          ...this.state.validationErrors,
+          boards: false
+        }
+      });
+    }
   };
 }
 

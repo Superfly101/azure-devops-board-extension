@@ -204,6 +204,53 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
     return hasProjectId && hasEpics && hasBoards;
   };
 
+  private validateProjectExists = async (projectId: string): Promise<boolean> => {
+    try {
+      const witClient = getClient(WorkItemTrackingRestClient);
+      
+      // Try to get the work item with the provided ID
+      const workItem = await witClient.getWorkItem(
+        parseInt(projectId), 
+        undefined, ["System.Id", "System.Title", "System.WorkItemType"]
+      );
+
+      // Check if the work item type is "Project"
+      if (workItem.fields["System.WorkItemType"] !== "Project") {
+        this.setState({
+          toastMessage: {
+            message: `Work item ${projectId} exists but is not of type "Project". Found type: ${workItem.fields["System.WorkItemType"]}`,
+            severity: MessageCardSeverity.Error
+          }
+        });
+        return false;
+      }
+
+      console.log(`Validated Project work item: ${workItem.fields["System.Title"]}`);
+      return true;
+
+    } catch (error) {
+      console.error(`Project validation failed for ID ${projectId}:`, error);
+      
+      // Check if it's a 404 (not found) error
+      if (error.status === 404) {
+        this.setState({
+          toastMessage: {
+            message: `Project with ID ${projectId} does not exist. Please verify the Project ID and try again.`,
+            severity: MessageCardSeverity.Error
+          }
+        });
+      } else {
+        this.setState({
+          toastMessage: {
+            message: `Failed to validate Project ID ${projectId}. Please check your permissions and try again.`,
+            severity: MessageCardSeverity.Error
+          }
+        });
+      }
+      return false;
+    }
+  };
+
   private handleSubmit = async () => {
     console.log("Validating form...");
     
@@ -217,10 +264,26 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
     // Clear any previous toast messages
     this.setState({ toastMessage: null });
 
+    const projectId = projectIdObservable.value?.trim();
+    
+    if (!projectId) {
+      console.log("Project ID is empty after validation");
+      return;
+    }
+
+    // Validate that the project ID exists and is of type "Project"
+    console.log(`Validating Project ID: ${projectId}`);
+    const projectExists = await this.validateProjectExists(projectId);
+    
+    if (!projectExists) {
+      console.log("Project validation failed");
+      return;
+    }
+
     console.log("Creating dependency epic...");
     console.log("###### Form Values ######");
 
-    console.log("Project ID:", projectIdObservable.value);
+    console.log("Project ID:", projectId);
     console.log("Selected Epics:", this.selectedEpics);
     console.log("Select Boards:", this.selectedBoards);
 

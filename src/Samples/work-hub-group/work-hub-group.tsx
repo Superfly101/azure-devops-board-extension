@@ -24,6 +24,7 @@ import { ButtonGroup } from "azure-devops-ui/ButtonGroup";
 import PfoBoardDropdown from "./pfo-board-dropdown";
 import { IListBoxItem } from "azure-devops-ui/ListBox";
 import { JsonPatchDocument } from "azure-devops-extension-api/WebApi";
+import { MessageCard, MessageCardSeverity } from "azure-devops-ui/MessageCard";
 
 const projectIdObservable = new ObservableValue<string | undefined>("");
 
@@ -35,6 +36,10 @@ interface IWorkHubGroup {
     epics: boolean;
     boards: boolean;
   };
+  isCreating: boolean;
+  currentProgress: number;
+  totalOperations: number;
+  toastMessage: { message: string; severity: MessageCardSeverity } | null;
 }
 
 interface TagItem {
@@ -55,7 +60,11 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
         projectId: false,
         epics: false,
         boards: false,
-      }
+      },
+      isCreating: false,
+      currentProgress: 0,
+      totalOperations: 0,
+      toastMessage: null,
     };
   }
 
@@ -90,6 +99,17 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
         />
 
         <div className="page-content">
+          {this.state.toastMessage && (
+            <div style={{ marginBottom: "16px", maxWidth: "800px", margin: "0 auto 16px auto" }}>
+              <MessageCard
+                severity={this.state.toastMessage.severity}
+                onDismiss={() => this.setState({ toastMessage: null })}
+              >
+                {this.state.toastMessage.message}
+              </MessageCard>
+            </div>
+          )}
+          
           <div className="form-container">
             <Card className="form-card">
               <div className="form-content">
@@ -125,6 +145,7 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
                         }
                       }}
                       width={TextFieldWidth.auto}
+                      disabled={this.state.isCreating}
                     />
                   </FormItem>
 
@@ -150,10 +171,11 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
                 <div className="form-actions">
                   <ButtonGroup>
                     <Button
-                      text="Create Epic"
+                      text={this.state.isCreating ? `Creating ${this.state.currentProgress} of ${this.state.totalOperations}...` : "Create Epic"}
                       primary={true}
-                      iconProps={{ iconName: "Add" }}
+                      iconProps={this.state.isCreating ? { iconName: "Spinner" } : { iconName: "Add" }}
                       onClick={() => this.handleSubmit()}
+                      disabled={this.state.isCreating}
                     />
                   </ButtonGroup>
                 </div>
@@ -192,6 +214,9 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
       return;
     }
 
+    // Clear any previous toast messages
+    this.setState({ toastMessage: null });
+
     console.log("Creating dependency epic...");
     console.log("###### Form Values ######");
 
@@ -205,9 +230,28 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
   private createDependcyEpics = async () => {
     const witClient = getClient(WorkItemTrackingRestClient);
     const projectId = projectIdObservable.value?.trim();
+    
+    const totalOperations = this.selectedBoards.length * this.selectedEpics.length;
+    let currentProgress = 0;
+    let successCount = 0;
+    let errorCount = 0;
+
+    // Initialize progress state
+    this.setState({
+      isCreating: true,
+      currentProgress: 0,
+      totalOperations: totalOperations,
+    });
 
     for (const board of this.selectedBoards) {
       for (const leadEpic of this.selectedEpics) {
+        currentProgress++;
+        
+        // Update progress
+        this.setState({
+          currentProgress: currentProgress,
+        });
+
         try {
           console.log(
             `Creating dependency epic for Lead Epic ${leadEpic.id} on team ${board.text}`
@@ -261,11 +305,46 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
             "Epic"
           );
           console.log("Dependency Epic Created:", dependencyEpic);
+          successCount++;
         } catch (error) {
-          console.log(`Failed to create dependency epic for Lead Epic ${leadEpic.id} on team ${board.text}`)
+          console.log(`Failed to create dependency epic for Lead Epic ${leadEpic.id} on team ${board.text}`);
+          errorCount++;
         }
       }
     }
+
+    // Show completion feedback
+    this.showCompletionToast(successCount, errorCount, totalOperations);
+    
+    // Reset creation state
+    this.setState({
+      isCreating: false,
+      currentProgress: 0,
+      totalOperations: 0,
+    });
+  };
+
+  private showCompletionToast = (successCount: number, errorCount: number, totalOperations: number) => {
+    let message: string;
+    let severity: MessageCardSeverity;
+
+    if (errorCount === 0) {
+      // All successful
+      message = `Successfully created ${successCount} dependency epic${successCount !== 1 ? 's' : ''}`;
+      severity = MessageCardSeverity.Info;
+    } else if (successCount === 0) {
+      // All failed
+      message = `Failed to create dependency epics. Check console for details.`;
+      severity = MessageCardSeverity.Error;
+    } else {
+      // Partial success
+      message = `Created ${successCount} of ${totalOperations} dependency epics. ${errorCount} failed. Check console for details.`;
+      severity = MessageCardSeverity.Warning;
+    }
+
+    this.setState({
+      toastMessage: { message, severity }
+    });
   };
 
   private async loadProjectContext(): Promise<void> {

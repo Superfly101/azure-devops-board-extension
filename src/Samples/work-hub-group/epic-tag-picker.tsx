@@ -26,7 +26,6 @@ export const AsyncEpicTagPicker: React.FunctionComponent<TagPickerProps> = ({ on
   const [suggestions, setSuggestions] = useObservableArray<TagItem>([]);
   const [suggestionsLoading, setSuggestionsLoading] =
     useObservable<boolean>(false);
-  const timeoutId = React.useRef<number>(0);
 
   const areTagsEqual = (a: TagItem, b: TagItem) => {
     return a.id === b.id;
@@ -34,13 +33,12 @@ export const AsyncEpicTagPicker: React.FunctionComponent<TagPickerProps> = ({ on
 
   const convertItemToPill = (tag: TagItem) => {
     return {
-      content: tag.text,
+      content: `${tag.id}: ${tag.text}`,
       onClick: () => alert(`Clicked tag "${tag.text}"`),
     };
   };
 
   const onSearchChanged = async (searchValue: string) => {
-    clearTimeout(timeoutId.current);
 
     setSuggestionsLoading(true);
 
@@ -50,7 +48,6 @@ export const AsyncEpicTagPicker: React.FunctionComponent<TagPickerProps> = ({ on
         return;
     }
 
-    // timeoutId.current = window.setTimeout( async () => {
       try {
         const client = getClient(WorkItemTrackingRestClient);
         const searchId = parseInt(searchValue);
@@ -71,7 +68,7 @@ export const AsyncEpicTagPicker: React.FunctionComponent<TagPickerProps> = ({ on
                     SELECT [System.Id], [System.Title]
                     FROM WorkItems
                     WHERE [System.WorkItemType] = 'Epic'
-                    AND [System.Title] CONTAINS WORDS '${searchValue}'
+                    AND [System.Title] CONTAINS '${searchValue}'
                 `
             }
         }
@@ -101,8 +98,7 @@ export const AsyncEpicTagPicker: React.FunctionComponent<TagPickerProps> = ({ on
           console.log("Error fetching epic suggestions:", error);
           setSuggestionsLoading(false);
         setSuggestions([]);
-      } 
-    // }, 500);
+      }
   };
 
   const onTagAdded = (tag: TagItem) => {

@@ -13,7 +13,10 @@ import {
   IProjectPageService,
   getClient,
 } from "azure-devops-extension-api";
-import { WorkItemTrackingRestClient } from "azure-devops-extension-api/WorkItemTracking";
+import {
+  WorkItemTrackingRestClient,
+  Wiql,
+} from "azure-devops-extension-api/WorkItemTracking";
 
 import { ObservableValue } from "azure-devops-ui/Core/Observable";
 import { FormItem } from "azure-devops-ui/FormItem";
@@ -31,6 +34,8 @@ const projectIdObservable = new ObservableValue<string | undefined>("");
 interface IWorkHubGroup {
   projectContext: any;
   assignedWorkItems: any[];
+  selectedEpics: TagItem[];
+  selectedBoards: Array<IListBoxItem<{ areaPath: string }>>;
   validationErrors: {
     projectId: boolean;
     epics: boolean;
@@ -39,23 +44,22 @@ interface IWorkHubGroup {
   isCreating: boolean;
   currentProgress: number;
   totalOperations: number;
-  toastMessage: { message: string; severity: MessageCardSeverity } | null;
+  feedback: { message: string; severity: MessageCardSeverity } | null;
 }
-
 interface TagItem {
   id: number;
   text: string;
 }
 
 class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
-  private selectedEpics: TagItem[] = [];
-  private selectedBoards: Array<IListBoxItem<{ areaPath: string }>> = [];
 
   constructor(props: {}) {
     super(props);
-    this.state = { 
-      projectContext: undefined, 
+    this.state = {
+      projectContext: undefined,
       assignedWorkItems: [],
+      selectedEpics: [],
+      selectedBoards: [],
       validationErrors: {
         projectId: false,
         epics: false,
@@ -64,7 +68,7 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
       isCreating: false,
       currentProgress: 0,
       totalOperations: 0,
-      toastMessage: null,
+      feedback: null,
     };
   }
 
@@ -90,6 +94,14 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
   }
 
   public render(): JSX.Element {
+    const {
+      validationErrors,
+      feedback,
+      isCreating,
+      currentProgress,
+      totalOperations,
+    } = this.state;
+
     return (
       <Page className="dependency-epic-hub flex-grow">
         <Header
@@ -99,17 +111,17 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
         />
 
         <div className="page-content">
-          {this.state.toastMessage && (
-            <div style={{ marginBottom: "16px", maxWidth: "800px", margin: "0 auto 16px auto" }}>
+          <div>
+            {feedback && (
               <MessageCard
-                severity={this.state.toastMessage.severity}
-                onDismiss={() => this.setState({ toastMessage: null })}
+                className="flex-self-stretch"
+                onDismiss={() => this.setState({ feedback: null })}
+                severity={feedback?.severity}
               >
-                {this.state.toastMessage.message}
+                {feedback?.message}
               </MessageCard>
-            </div>
-          )}
-          
+            )}
+          </div>
           <div className="form-container">
             <Card className="form-card">
               <div className="form-content">
@@ -124,8 +136,8 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
                 <div className="form-fields">
                   <FormItem
                     label="Project ID"
-                    message={this.state.validationErrors.projectId ? "Project ID is required" : "Enter the target project identifier"}
-                    error={this.state.validationErrors.projectId}
+                    message={validationErrors.projectId ? "Project Id cannot be empty and must be an integer" : "Enter the Project Id"}
+                    error={validationErrors.projectId}
                     className="form-field"
                   >
                     <TextField
@@ -133,26 +145,28 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
                       placeholder="Enter project ID..."
                       value={projectIdObservable}
                       onChange={(e) => {
-                        projectIdObservable.value = e.target.value;
-                        // Clear error when user starts typing
-                        if (this.state.validationErrors.projectId && e.target.value.trim()) {
+                        if (e.target.value && validationErrors.projectId) {
                           this.setState({
                             validationErrors: {
-                              ...this.state.validationErrors,
-                              projectId: false
-                            }
+                              ...validationErrors,
+                              projectId: false,
+                            },
                           });
                         }
+                        projectIdObservable.value = e.target.value;
                       }}
                       width={TextFieldWidth.auto}
-                      disabled={this.state.isCreating}
                     />
                   </FormItem>
 
                   <FormItem
                     label="Source of Truth Epic ID"
-                    message={this.state.validationErrors.epics ? "At least one epic must be selected" : "Select the epic that will serve as the source of truth"}
-                    error={this.state.validationErrors.epics}
+                    message={
+                      validationErrors.epics
+                        ? "Atleast one epic must be selected"
+                        : "Select the epic that will serve as the source of truth"
+                    }
+                    error={validationErrors.epics}
                     className="form-field"
                   >
                     <AsyncEpicTagPicker onSelect={this.handleEpicSelection} />
@@ -160,8 +174,12 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
 
                   <FormItem
                     label="PFO Boards"
-                    message={this.state.validationErrors.boards ? "At least one board must be selected" : "Choose the PFO boards where dependency epics will be created"}
-                    error={this.state.validationErrors.boards}
+                    message={
+                      validationErrors.boards
+                        ? "Atleast one board must be selected"
+                        : "Choose the PFO boards where dependency epics will be created"
+                    }
+                    error={validationErrors.boards}
                     className="form-field"
                   >
                     <PfoBoardDropdown onSelect={this.handleBoardSelection} />
@@ -171,11 +189,19 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
                 <div className="form-actions">
                   <ButtonGroup>
                     <Button
-                      text={this.state.isCreating ? `Creating ${this.state.currentProgress} of ${this.state.totalOperations}...` : "Create Epic"}
+                      text={`${
+                        isCreating
+                          ? `Creating ${currentProgress} of ${totalOperations}...`
+                          : "Create Epic"
+                      }`}
                       primary={true}
-                      iconProps={this.state.isCreating ? { iconName: "Spinner" } : { iconName: "Add" }}
+                      iconProps={
+                        isCreating
+                          ? { iconName: "Spinner" }
+                          : { iconName: "Add" }
+                      }
                       onClick={() => this.handleSubmit()}
-                      disabled={this.state.isCreating}
+                      disabled={isCreating}
                     />
                   </ButtonGroup>
                 </div>
@@ -187,139 +213,137 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
     );
   }
 
-  private validateForm = (): boolean => {
+  private validateForm = () => {
+    const { selectedEpics, selectedBoards } = this.state;
+
     const projectIdValue = projectIdObservable.value?.trim();
-    const hasProjectId = Boolean(projectIdValue);
-    const hasEpics = this.selectedEpics.length > 0;
-    const hasBoards = this.selectedBoards.length > 0;
+    const hasProjectId = /^\d+$/.test(projectIdValue || "");;
+    const hasEpics = selectedEpics.length > 0;
+    const hasBoards = selectedBoards.length > 0;
 
-    const validationErrors = {
-      projectId: !hasProjectId,
-      epics: !hasEpics,
-      boards: !hasBoards,
-    };
+    const isValid = hasProjectId && hasEpics && hasBoards;
 
-    this.setState({ validationErrors });
-
-    return hasProjectId && hasEpics && hasBoards;
+    this.setState({
+      validationErrors: {
+        projectId: !hasProjectId,
+        epics: !hasEpics,
+        boards: !hasBoards,
+      },
+    });
+    return isValid;
   };
 
-  private validateProjectExists = async (projectId: string): Promise<boolean> => {
+  private handleSubmit = async () => {
+    const { selectedEpics, selectedBoards } = this.state;
+
+    console.log("Creating dependency epic...");
+    console.log("###### Form Values ######");
+
+    console.log("Project ID:", projectIdObservable.value);
+
+    console.log("Selected Epics:", selectedEpics);
+
+    console.log("Select Boards:", selectedBoards);
+
+    const formIsvalid = this.validateForm();
+    if (!formIsvalid) {
+      console.log("Form Validation Failed!");
+      return;
+    }
+
+    const projectId = projectIdObservable.value?.trim();
+
+    if (!projectId) {
+      return;
+    }
+
+    const projectExists = await this.ValidateProjectExists(projectId);
+
+    if (!projectExists) {
+      return;
+    }
+
+    this.setState({ feedback: null });
+
+    await this.createDependcyEpics();
+  };
+
+  private ValidateProjectExists = async (projectId: string) => {
     try {
-      const witClient = getClient(WorkItemTrackingRestClient);
-      
-      // Try to get the work item with the provided ID
-      const workItem = await witClient.getWorkItem(
-        parseInt(projectId), 
-        undefined, ["System.Id", "System.Title", "System.WorkItemType"]
+      const client = getClient(WorkItemTrackingRestClient);
+
+      const workItem = await client.getWorkItem(
+        parseInt(projectId),
+        undefined,
+        ["System.Id", "System.Title", "System.WorkItemType"]
       );
 
-      // Check if the work item type is "Project"
-      if (workItem.fields["System.WorkItemType"] !== "Project") {
+      const workItemType = workItem.fields["System.WorkItemType"];
+
+      if (workItemType !== "Project") {
         this.setState({
-          toastMessage: {
-            message: `Work item ${projectId} exists but is not of type "Project". Found type: ${workItem.fields["System.WorkItemType"]}`,
-            severity: MessageCardSeverity.Error
-          }
+          feedback: {
+            message: `Work item with ID ${projectId} exists but not of type "Project". Found type "${workItemType}".`,
+            severity: MessageCardSeverity.Error,
+          },
         });
         return false;
       }
 
-      console.log(`Validated Project work item: ${workItem.fields["System.Title"]}`);
       return true;
-
     } catch (error) {
-      console.error(`Project validation failed for ID ${projectId}:`, error);
-      
-      // Check if it's a 404 (not found) error
+      console.log("Error validating Project Id:", error);
+
       if (error.status === 404) {
         this.setState({
-          toastMessage: {
-            message: `Project with ID ${projectId} does not exist. Please verify the Project ID and try again.`,
-            severity: MessageCardSeverity.Error
-          }
+          feedback: {
+            message: `Project with ID ${projectId} doest not exist. Please verify the Project ID and try again.`,
+            severity: MessageCardSeverity.Error,
+          },
         });
       } else {
         this.setState({
-          toastMessage: {
+          feedback: {
             message: `Failed to validate Project ID ${projectId}. Please check your permissions and try again.`,
-            severity: MessageCardSeverity.Error
-          }
+            severity: MessageCardSeverity.Error,
+          },
         });
       }
       return false;
     }
   };
 
-  private handleSubmit = async () => {
-    console.log("Validating form...");
-    
-    const isValid = this.validateForm();
-    
-    if (!isValid) {
-      console.log("Form validation failed");
-      return;
-    }
-
-    // Clear any previous toast messages
-    this.setState({ toastMessage: null });
-
-    const projectId = projectIdObservable.value?.trim();
-    
-    if (!projectId) {
-      console.log("Project ID is empty after validation");
-      return;
-    }
-
-    // Validate that the project ID exists and is of type "Project"
-    console.log(`Validating Project ID: ${projectId}`);
-    const projectExists = await this.validateProjectExists(projectId);
-    
-    if (!projectExists) {
-      console.log("Project validation failed");
-      return;
-    }
-
-    console.log("Creating dependency epic...");
-    console.log("###### Form Values ######");
-
-    console.log("Project ID:", projectId);
-    console.log("Selected Epics:", this.selectedEpics);
-    console.log("Select Boards:", this.selectedBoards);
-
-    await this.createDependcyEpics();
-  };
-
   private createDependcyEpics = async () => {
+    const { selectedBoards, selectedEpics } = this.state;
+
     const witClient = getClient(WorkItemTrackingRestClient);
     const projectId = projectIdObservable.value?.trim();
-    
-    const totalOperations = this.selectedBoards.length * this.selectedEpics.length;
+
+    const totalOperations = selectedBoards.length * selectedEpics.length;
     let currentProgress = 0;
     let successCount = 0;
     let errorCount = 0;
 
-    // Initialize progress state
     this.setState({
       isCreating: true,
       currentProgress: 0,
       totalOperations: totalOperations,
     });
 
-    for (const board of this.selectedBoards) {
-      for (const leadEpic of this.selectedEpics) {
-        currentProgress++;
-        
-        // Update progress
-        this.setState({
-          currentProgress: currentProgress,
-        });
-
+    for (const board of selectedBoards) {
+      for (const leadEpic of selectedEpics) {
         try {
           console.log(
             `Creating dependency epic for Lead Epic ${leadEpic.id} on team ${board.text}`
           );
-         console.log("Area Path:", board.data?.areaPath || board)
+          console.log("Area Path:", board.data?.areaPath || board);
+
+          currentProgress += 1;
+
+          this.setState({
+            currentProgress: currentProgress,
+          });
+
           const dependencyEpicTitle = `DEPENDENCY: ${leadEpic.text}`;
           const organization = SDK.getHost().name;
           const baseUrl = `https://dev.azure.com/${organization}/${this.state.projectContext.id}/_apis/wit/workItems`;
@@ -368,18 +392,18 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
             "Epic"
           );
           console.log("Dependency Epic Created:", dependencyEpic);
-          successCount++;
+
+          successCount += 1;
         } catch (error) {
-          console.log(`Failed to create dependency epic for Lead Epic ${leadEpic.id} on team ${board.text}`);
-          errorCount++;
+          console.log(
+            `Failed to create dependency epic for Lead Epic ${leadEpic.id} on team ${board.text}`
+          );
         }
       }
     }
 
-    // Show completion feedback
-    this.showCompletionToast(successCount, errorCount, totalOperations);
-    
-    // Reset creation state
+    this.showCompletionFeedback(successCount, errorCount, totalOperations);
+
     this.setState({
       isCreating: false,
       currentProgress: 0,
@@ -387,26 +411,31 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
     });
   };
 
-  private showCompletionToast = (successCount: number, errorCount: number, totalOperations: number) => {
-    let message: string;
-    let severity: MessageCardSeverity;
+  private showCompletionFeedback = (
+    successCount: number,
+    errorCount: number,
+    totalOperations: number
+  ) => {
+    let message, severity;
 
     if (errorCount === 0) {
-      // All successful
-      message = `Successfully created ${successCount} dependency epic${successCount !== 1 ? 's' : ''}`;
+      message = `Successfully create ${successCount} dependency epic${
+        successCount > 1 ? "s" : ""
+      }`;
       severity = MessageCardSeverity.Info;
     } else if (successCount === 0) {
-      // All failed
-      message = `Failed to create dependency epics. Check console for details.`;
+      message = "Failed to create dependcy epics. Check console for details.";
       severity = MessageCardSeverity.Error;
     } else {
-      // Partial success
       message = `Created ${successCount} of ${totalOperations} dependency epics. ${errorCount} failed. Check console for details.`;
       severity = MessageCardSeverity.Warning;
     }
 
     this.setState({
-      toastMessage: { message, severity }
+      feedback: {
+        message,
+        severity,
+      },
     });
   };
 
@@ -426,31 +455,33 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
   }
 
   private handleEpicSelection = (epics: TagItem[]) => {
-    this.selectedEpics = epics;
-    
-    // Clear error when epics are selected
-    if (this.state.validationErrors.epics && epics.length > 0) {
+    const { validationErrors } = this.state;
+
+    if (validationErrors.epics && epics.length > 0) {
       this.setState({
         validationErrors: {
-          ...this.state.validationErrors,
-          epics: false
-        }
+          ...validationErrors,
+          epics: false,
+        },
       });
     }
+    this.setState({ selectedEpics: epics });
   };
 
-  private handleBoardSelection = (boards: Array<IListBoxItem<{ areaPath: string }>>) => {
-    this.selectedBoards = boards;
-    
-    // Clear error when boards are selected
-    if (this.state.validationErrors.boards && boards.length > 0) {
+  private handleBoardSelection = (
+    boards: Array<IListBoxItem<{ areaPath: string }>>
+  ) => {
+    const { validationErrors } = this.state;
+
+    if (validationErrors.boards && boards.length > 0) {
       this.setState({
         validationErrors: {
-          ...this.state.validationErrors,
-          boards: false
-        }
+          ...validationErrors,
+          boards: false,
+        },
       });
     }
+    this.setState({ selectedBoards: boards });
   };
 }
 

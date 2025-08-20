@@ -46,6 +46,7 @@ interface IWorkHubGroup {
   totalOperations: number;
   feedback: { message: string; severity: MessageCardSeverity } | null;
 }
+
 interface TagItem {
   id: number;
   text: string;
@@ -100,6 +101,8 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
       isCreating,
       currentProgress,
       totalOperations,
+      selectedEpics,
+      selectedBoards,
     } = this.state;
 
     return (
@@ -169,7 +172,10 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
                     error={validationErrors.epics}
                     className="form-field"
                   >
-                    <AsyncEpicTagPicker onSelect={this.handleEpicSelection} />
+                    <AsyncEpicTagPicker 
+                      selectedTags={selectedEpics}
+                      onSelect={this.handleEpicSelection} 
+                    />
                   </FormItem>
 
                   <FormItem
@@ -182,7 +188,10 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
                     error={validationErrors.boards}
                     className="form-field"
                   >
-                    <PfoBoardDropdown onSelect={this.handleBoardSelection} />
+                    <PfoBoardDropdown 
+                      selectedBoards={selectedBoards}
+                      onSelect={this.handleBoardSelection} 
+                    />
                   </FormItem>
                 </div>
 
@@ -213,11 +222,25 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
     );
   }
 
+  private resetForm = () => {
+    this.setState({
+      selectedEpics: [],
+      selectedBoards: [],
+      validationErrors: {
+        projectId: false,
+        epics: false,
+        boards: false,
+      },
+    });
+    
+    projectIdObservable.value = "";
+  };
+
   private validateForm = () => {
     const { selectedEpics, selectedBoards } = this.state;
 
     const projectIdValue = projectIdObservable.value?.trim();
-    const hasProjectId = /^\d+$/.test(projectIdValue || "");;
+    const hasProjectId = /^\d+$/.test(projectIdValue || "");
     const hasEpics = selectedEpics.length > 0;
     const hasBoards = selectedBoards.length > 0;
 
@@ -398,6 +421,7 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
           console.log(
             `Failed to create dependency epic for Lead Epic ${leadEpic.id} on team ${board.text}`
           );
+          errorCount += 1;
         }
       }
     }
@@ -419,12 +443,15 @@ class WorkHubGroup extends React.Component<{}, IWorkHubGroup> {
     let message, severity;
 
     if (errorCount === 0) {
-      message = `Successfully create ${successCount} dependency epic${
+      message = `Successfully created ${successCount} dependency epic${
         successCount > 1 ? "s" : ""
       }`;
       severity = MessageCardSeverity.Info;
+      
+      // Reset form only on complete success
+      this.resetForm();
     } else if (successCount === 0) {
-      message = "Failed to create dependcy epics. Check console for details.";
+      message = "Failed to create dependency epics. Check console for details.";
       severity = MessageCardSeverity.Error;
     } else {
       message = `Created ${successCount} of ${totalOperations} dependency epics. ${errorCount} failed. Check console for details.`;

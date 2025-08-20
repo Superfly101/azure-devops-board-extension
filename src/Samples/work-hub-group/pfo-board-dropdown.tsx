@@ -16,13 +16,13 @@ import {
 } from "azure-devops-extension-api/Core";
 import { WorkRestClient } from "azure-devops-extension-api/Work";
 
-
 interface IMultiSelectState {
   teams: Array<IListBoxItem<{ areaPath: string }>>;
 }
 
 interface PfoBoardDropdownProps {
-  onSelect: (teams: Array<IListBoxItem<{ areaPath: string}>>) => void
+  selectedBoards: Array<IListBoxItem<{ areaPath: string }>>;
+  onSelect: (teams: Array<IListBoxItem<{ areaPath: string}>>) => void;
 }
 
 export default class PfoBoardDropdown extends React.Component<
@@ -42,7 +42,7 @@ export default class PfoBoardDropdown extends React.Component<
         .then(() => {
           console.log("SDK is ready, loading project context...");
           this.loadTeams();
-          this.setupSelectionChangeLister()
+          this.setupSelectionChangeLister();
         })
         .catch((error) => {
           console.error("SDK ready failed: ", error);
@@ -55,20 +55,48 @@ export default class PfoBoardDropdown extends React.Component<
     }
   }
 
+  public componentDidUpdate(prevProps: PfoBoardDropdownProps) {
+    // Sync internal selection with prop changes
+    if (prevProps.selectedBoards !== this.props.selectedBoards) {
+      this.updateSelectionFromProps();
+    }
+  }
+
+  private isUpdatingFromProps = false;
+
+  private updateSelectionFromProps = () => {
+    this.isUpdatingFromProps = true;
+    
+    this.selection.clear();
+    
+    this.props.selectedBoards.forEach(selectedBoard => {
+      const index = this.state.teams.findIndex(team => team.id === selectedBoard.id);
+      if (index !== -1) {
+        this.selection.select(index);
+      }
+    });
+    
+    this.isUpdatingFromProps = false;
+  };
+
   private setupSelectionChangeLister = () => {
     this.selection.subscribe(() => {
+      // Prevent infinite loop when updating from props
+      if (this.isUpdatingFromProps) {
+        return;
+      }
 
-      const selecteItems: Array<IListBoxItem<{ areaPath: string}>> = [];
+      const selectedItems: Array<IListBoxItem<{ areaPath: string}>> = [];
       this.selection.value.forEach(range => {
         for (let i = range.beginIndex; i <= range.endIndex; i++) {
-          if ( this.state.teams[i]) {
-            selecteItems.push(this.state.teams[i])
+          if (this.state.teams[i]) {
+            selectedItems.push(this.state.teams[i]);
           }
         }
       });
-      this.props.onSelect(selecteItems);
-    })
-  }
+      this.props.onSelect(selectedItems);
+    });
+  };
 
   public render(): JSX.Element {
     return (
@@ -102,7 +130,7 @@ export default class PfoBoardDropdown extends React.Component<
     );
   }
 
-   private async loadTeams(): Promise<void> {
+  private async loadTeams(): Promise<void> {
     try {
       const projectService = await SDK.getService<IProjectPageService>(
         CommonServiceIds.ProjectPageService
@@ -126,14 +154,18 @@ export default class PfoBoardDropdown extends React.Component<
             project: project.name,
             teamId: team.id,
             team: team.name,
-          }
+          };
 
           const boards = await workClient.getBoards(teamContext);
 
           const teamFieldValues = await workClient.getTeamFieldValues(teamContext);
 
           if (boards && boards.length > 0) {
-            return { id: team.id, text: team.name, data: { areaPath: teamFieldValues.defaultValue } };
+            return { 
+              id: team.id, 
+              text: team.name, 
+              data: { areaPath: teamFieldValues.defaultValue } 
+            };
           }
         } catch (error) {
           console.log(`Could not get board for team ${team.name}: ${error}`);
@@ -146,7 +178,10 @@ export default class PfoBoardDropdown extends React.Component<
         IListBoxItem<{ areaPath: string }>
       >;
 
-      this.setState({ teams: teamsWithBoards });
+      this.setState({ teams: teamsWithBoards }, () => {
+        // After teams are loaded, sync with selected boards from props
+        this.updateSelectionFromProps();
+      });
     } catch (error) {
       console.error("Failed to load PFO Teams: ", error);
     }

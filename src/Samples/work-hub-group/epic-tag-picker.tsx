@@ -17,15 +17,16 @@ interface TagItem {
 }
 
 interface TagPickerProps {
+  selectedTags: TagItem[];
   onSelect: (selectedTags: TagItem[]) => void;
 }
 
-
-export const AsyncEpicTagPicker: React.FunctionComponent<TagPickerProps> = ({ onSelect }) => {
-  const [tagItems, setTagItems] = useObservableArray<TagItem>([]);
+export const AsyncEpicTagPicker: React.FunctionComponent<TagPickerProps> = ({ 
+  selectedTags, 
+  onSelect 
+}) => {
   const [suggestions, setSuggestions] = useObservableArray<TagItem>([]);
-  const [suggestionsLoading, setSuggestionsLoading] =
-    useObservable<boolean>(false);
+  const [suggestionsLoading, setSuggestionsLoading] = useObservable<boolean>(false);
 
   const areTagsEqual = (a: TagItem, b: TagItem) => {
     return a.id === b.id;
@@ -39,78 +40,77 @@ export const AsyncEpicTagPicker: React.FunctionComponent<TagPickerProps> = ({ on
   };
 
   const onSearchChanged = async (searchValue: string) => {
-
     setSuggestionsLoading(true);
 
     if (!searchValue) {
-        setSuggestions([])
-        setSuggestionsLoading(false);
-        return;
+      setSuggestions([]);
+      setSuggestionsLoading(false);
+      return;
     }
 
-      try {
-        const client = getClient(WorkItemTrackingRestClient);
-        const searchId = parseInt(searchValue);
-        let wiqlQuery: Wiql;
+    try {
+      const client = getClient(WorkItemTrackingRestClient);
+      const searchId = parseInt(searchValue);
+      let wiqlQuery: Wiql;
 
-        if (!isNaN(searchId)) {
-          wiqlQuery = {
-            query: `
-                SELECT [System.Id], [System.Title]
-                FROM WorkItems
-                WHERE [System.WorkItemType] = 'Epic'
-                AND [System.Id] = ${searchId}
-            `,
-          };
-        } else {
-            wiqlQuery = {
-                query: `
-                    SELECT [System.Id], [System.Title]
-                    FROM WorkItems
-                    WHERE [System.WorkItemType] = 'Epic'
-                    AND [System.Title] CONTAINS '${searchValue}'
-                `
-            }
-        }
+      if (!isNaN(searchId)) {
+        wiqlQuery = {
+          query: `
+            SELECT [System.Id], [System.Title]
+            FROM WorkItems
+            WHERE [System.WorkItemType] = 'Epic'
+            AND [System.Id] = ${searchId}
+          `,
+        };
+      } else {
+        wiqlQuery = {
+          query: `
+            SELECT [System.Id], [System.Title]
+            FROM WorkItems
+            WHERE [System.WorkItemType] = 'Epic'
+            AND [System.Title] CONTAINS '${searchValue}'
+          `
+        };
+      }
 
-        const queryResult = await client.queryByWiql(wiqlQuery);
-        const workItemIds = queryResult.workItems.map((wi) => wi.id).slice(0, 200);
+      const queryResult = await client.queryByWiql(wiqlQuery);
+      const workItemIds = queryResult.workItems.map((wi) => wi.id).slice(0, 200);
 
-        if (workItemIds.length > 0) {
+      if (workItemIds.length > 0) {
         const workItems = await client.getWorkItems(workItemIds, undefined, ["System.Id", "System.Title"]);
-        const suggestedItems = workItems.map(wi => ({ id: wi.id, text: wi.fields["System.Title"]}));
+        const suggestedItems = workItems.map(wi => ({ 
+          id: wi.id, 
+          text: wi.fields["System.Title"]
+        }));
 
-         setSuggestions(
-          suggestedItems
-            .filter(
-              (testItem) =>
-                tagItems.value.findIndex(
-                  (testSuggestion) => testSuggestion.id == testItem.id
-                ) === -1
-            )
+        setSuggestions(
+          suggestedItems.filter(
+            (testItem) =>
+              selectedTags.findIndex(
+                (testSuggestion) => testSuggestion.id === testItem.id
+              ) === -1
+          )
         );
       } else {
-       setSuggestions([]);
-      }
-
-        setSuggestionsLoading(false);
-      } catch(error) {
-          console.log("Error fetching epic suggestions:", error);
-          setSuggestionsLoading(false);
         setSuggestions([]);
       }
+
+      setSuggestionsLoading(false);
+    } catch (error) {
+      console.log("Error fetching epic suggestions:", error);
+      setSuggestionsLoading(false);
+      setSuggestions([]);
+    }
   };
 
   const onTagAdded = (tag: TagItem) => {
-    const newTags = [...tagItems.value, tag]
-    setTagItems(newTags);
-    onSelect(newTags)
+    const newTags = [...selectedTags, tag];
+    onSelect(newTags);
   };
 
   const onTagRemoved = (tag: TagItem) => {
-    const newTags = tagItems.value.filter((x) => x.id !== tag.id)
-    setTagItems(newTags);
-    onSelect(newTags)
+    const newTags = selectedTags.filter((x) => x.id !== tag.id);
+    onSelect(newTags);
   };
 
   const renderSuggestionItem = (tag: ISuggestionItemProps<TagItem>) => {
@@ -128,7 +128,7 @@ export const AsyncEpicTagPicker: React.FunctionComponent<TagPickerProps> = ({ on
         onTagAdded={onTagAdded}
         onTagRemoved={onTagRemoved}
         renderSuggestionItem={renderSuggestionItem}
-        selectedTags={tagItems}
+        selectedTags={selectedTags}
         suggestions={suggestions}
         suggestionsLoading={suggestionsLoading}
         ariaLabel={"Search for Epics by Id or Title"}
